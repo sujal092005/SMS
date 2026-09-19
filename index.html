@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#1E3A8A" />
+    <meta name="description" content="RAVS Smart School - Unified Campus Management & Connected Fleet Telemetry Ecosystem" />
+    <link rel="manifest" href="/manifest.json" />
+    <title>RAVS Smart School — Mobile Campus Portal</title>
+
+    <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    
+    <!-- Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+
+    <!-- Tailwind CDN with Stitch Design System Tokens -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#00236f",
+              "primary-container": "#1e3a8a",
+              "on-primary": "#ffffff",
+              "on-primary-container": "#90a8ff",
+              "secondary": "#0051d5",
+              "secondary-container": "#316bf3",
+              "on-secondary": "#ffffff",
+              "background": "#faf8ff",
+              "surface": "#faf8ff",
+              "surface-container-lowest": "#ffffff",
+              "surface-container-low": "#f2f3ff",
+              "surface-container": "#eaedff",
+              "surface-container-high": "#e2e7ff",
+              "surface-container-highest": "#dae2fd",
+              "on-background": "#131b2e",
+              "on-surface": "#131b2e",
+              "on-surface-variant": "#444651",
+              "outline": "#757682",
+              "outline-variant": "#c5c5d3",
+              "tertiary": "#00312c",
+              "tertiary-container": "#004942",
+              "on-tertiary-container": "#4ebdb0",
+              "error": "#ba1a1a",
+              "error-container": "#ffdad6",
+              "on-error": "#ffffff",
+              "brand": {
+                50: '#eef2ff',
+                100: '#e0e7ff',
+                200: '#c7d2fe',
+                500: '#3b82f6',
+                600: '#2563eb',
+                700: '#1d4ed8',
+                800: '#1e3a8a',
+                900: '#172554',
+              }
+            },
+            fontFamily: {
+              sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
+              body: ['Inter', 'sans-serif'],
+              headline: ['"Plus Jakarta Sans"', 'sans-serif']
+            },
+            boxShadow: {
+              'card-soft': '0 2px 12px -2px rgba(30, 58, 138, 0.06), 0 1px 3px rgba(0, 0, 0, 0.02)',
+              'card-hover': '0 12px 30px -4px rgba(30, 58, 138, 0.12), 0 4px 10px -2px rgba(30, 58, 138, 0.06)',
+              'glass': '0 8px 32px 0 rgba(31, 38, 135, 0.07)',
+            }
+          }
+        }
+      };
+    </script>
+  </head>
+  <body class="bg-slate-100 text-[#131b2e] antialiased overflow-x-hidden min-h-screen selection:bg-indigo-100 selection:text-indigo-900">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "RAVS Smart School",
+  "short_name": "RAVS School",
+  "description": "Unified School Management & Connected Fleet Telemetry Ecosystem",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF8FF",
+  "theme_color": "#1E3A8A",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
