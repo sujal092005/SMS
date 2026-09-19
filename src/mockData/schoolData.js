@@ -177,28 +177,6 @@ export const INITIAL_TEACHER_ATTENDANCE_LOGS = [
     assignedWing: 'Academic Block 2 • Room 204',
     temperature: '98.2°F (Normal)',
     remarks: 'Punched in on schedule.'
-  },
-  {
-    id: 'tlog_3',
-    date: '17 Sep 2026',
-    checkInTime: '07:51 AM',
-    gate: 'Science Wing Gate B',
-    shift: 'Morning Shift (07:45 AM - 02:30 PM)',
-    status: 'GRACE_PERIOD',
-    assignedWing: 'Senior STEM Lab',
-    temperature: '98.6°F (Normal)',
-    remarks: 'Checked in for Physics Lab session.'
-  },
-  {
-    id: 'tlog_4',
-    date: '16 Sep 2026',
-    checkInTime: '07:38 AM',
-    gate: 'Main Campus Gate A (North)',
-    shift: 'Morning Shift (07:45 AM - 02:30 PM)',
-    status: 'ON_TIME',
-    assignedWing: 'Academic Block 2 • Room 204',
-    temperature: '98.1°F (Normal)',
-    remarks: 'Routine check-in.'
   }
 ];
 
@@ -221,26 +199,6 @@ export const INITIAL_NOTICES = [
     targetAudience: 'All Campus',
     badgeColor: 'emerald',
     content: 'Athletic selection trials for Under-14 and Under-17 categories will be conducted this Friday on the central grounds starting 7:30 AM. Sports kits mandatory.',
-    pinned: false
-  },
-  {
-    id: 'not_3',
-    title: 'Mandatory Faculty Meeting: Continuous Assessment Sync',
-    date: '18 Sep 2026',
-    category: 'Administration',
-    targetAudience: 'Teachers',
-    badgeColor: 'purple',
-    content: 'All class in-charges and department heads must assemble in Conference Hall A at 3:15 PM to review Term 1 question bank moderation.',
-    pinned: false
-  },
-  {
-    id: 'not_4',
-    title: 'Route #4 Bus Stoppage Adjustment Notice',
-    date: '17 Sep 2026',
-    category: 'Transportation',
-    targetAudience: 'Parents & Drivers',
-    badgeColor: 'amber',
-    content: 'Due to municipal road paving near Sector 14, Morning Stop 3 will temporarily shift 50 meters forward to the Metro Gate 2 lane for the next 48 hours.',
     pinned: false
   }
 ];
@@ -285,58 +243,23 @@ export const INITIAL_BUSES = [
       { name: 'Kalyan Vihar', time: '08:10 AM', status: 'PASSED' },
       { name: 'RAVS Senior School', time: '08:35 AM', status: 'SCHEDULED' }
     ]
-  },
-  {
-    id: 'BUS-03',
-    busNumber: 'BUS-03',
-    plateNumber: 'DL-01-EF-3310',
-    driverName: 'Suresh Patel',
-    driverPhone: '+91 98765 99887',
-    route: 'Route #7 (East Sector Express)',
-    status: 'STANDBY',
-    speed: 0,
-    etaMinutes: 0,
-    lastCoordinate: { lat: 28.5921, lng: 77.2411 },
-    capacity: '24 / 30 Enrolled',
-    stops: [
-      { name: 'Mayur Vihar Phase 1', time: '07:10 AM', status: 'SCHEDULED' },
-      { name: 'Akshardham Link', time: '07:30 AM', status: 'SCHEDULED' },
-      { name: 'RAVS Senior School', time: '08:15 AM', status: 'SCHEDULED' }
-    ]
   }
 ];
 
+// Clean Essential Faculty Chat (No noisy demo messages)
 export const INITIAL_FACULTY_CHATS = [
   {
     id: 'fc_1',
     sender: 'Dr. Arvind Sharma (Principal)',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    time: '08:05 AM',
-    message: 'Good morning faculty. Please complete campus QR clock-in at the main gate and ensure all 1st period roll-calls are logged by 08:30 AM.',
+    time: '08:00 AM',
+    message: 'Welcome teachers! Please complete your Gate QR Clock-In and upload required class revision notes to your respective classrooms.',
     isSelf: false,
     roleTag: 'Admin'
-  },
-  {
-    id: 'fc_2',
-    sender: 'Priya Sharma (Class 8-A)',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
-    time: '08:12 AM',
-    message: 'Good morning. Checked in at Gate A. Uploaded Chapter 4 Quadratic Formula proofs specifically for Class 8-A students.',
-    isSelf: true,
-    roleTag: 'Teacher'
-  },
-  {
-    id: 'fc_3',
-    sender: 'Sunil Bhatt (Sports Coordinator)',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-    time: '08:18 AM',
-    message: 'Annual sports meet registration list has been posted on the notice board. Kindly advise students to collect trial consent slips.',
-    isSelf: false,
-    roleTag: 'Teacher'
   }
 ];
 
-// Notes strictly targeted to specific classrooms to eliminate conflict
+// Notes with image / file attachments support
 export const INITIAL_CLASS_NOTES = [
   {
     id: 'cn_1',
@@ -347,20 +270,26 @@ export const INITIAL_CLASS_NOTES = [
     downloads: 38,
     targetClassId: '8A',
     targetClassName: 'Class 8-A',
-    summary: 'Standard form ax² + bx + c = 0, derivation of discriminant Δ = b² - 4ac, and 10 practice problems for weekend submission.',
-    fileType: 'PDF'
+    summary: 'Standard form ax² + bx + c = 0, derivation of discriminant Δ = b² - 4ac, and 10 practice problems.',
+    fileType: 'PDF',
+    fileName: 'Quadratic_Equations_Formula_Sheet.pdf',
+    fileSize: '1.8 MB',
+    fileData: null
   },
   {
     id: 'cn_2',
     subject: 'Science (Biology)',
-    title: 'Photosynthesis & Cellular Respiration Comparative Chart',
+    title: 'Photosynthesis Chloroplast Anatomy Diagram',
     teacher: 'Kavita Chawla',
     time: '17 Sep 2026',
     downloads: 42,
     targetClassId: '8A',
     targetClassName: 'Class 8-A',
-    summary: 'Light-dependent vs dark reactions, Calvin cycle basics, stomata regulation diagrams with labelled chloroplast anatomy.',
-    fileType: 'PDF'
+    summary: 'High-resolution anatomical diagram of plant thylakoid membranes, stroma, and chlorophyll light reactions.',
+    fileType: 'IMAGE',
+    fileName: 'chloroplast_diagram_hd.jpg',
+    fileSize: '2.4 MB',
+    fileData: 'https://images.unsplash.com/photo-1530595467537-0b5996c41f2d?w=800&auto=format&fit=crop&q=80'
   },
   {
     id: 'cn_3',
@@ -371,20 +300,11 @@ export const INITIAL_CLASS_NOTES = [
     downloads: 45,
     targetClassId: '10A',
     targetClassName: 'Class 10-A (CBSE)',
-    summary: 'Treaty of Vienna (1815), French Revolution ripple effects, and unification milestones of Italy & Germany.',
-    fileType: 'PDF'
-  },
-  {
-    id: 'cn_4',
-    subject: 'Mathematics',
-    title: 'Class 5th Fractions & Decimals Visual Worksheets',
-    teacher: 'Sunita Sen',
-    time: '18 Sep 2026',
-    downloads: 20,
-    targetClassId: '5A',
-    targetClassName: 'Class 5-A',
-    summary: 'Step by step shading exercises for proper, improper and mixed fractions with real life fruit sharing examples.',
-    fileType: 'PDF'
+    summary: 'Treaty of Vienna (1815), French Revolution ripple effects, and unification milestones.',
+    fileType: 'PDF',
+    fileName: 'Nationalism_In_Europe_Mindmap.pdf',
+    fileSize: '3.1 MB',
+    fileData: null
   }
 ];
 
@@ -412,20 +332,10 @@ export const PRESET_AI_KNOWLEDGE = {
       '**Final Answer**: Roots are `x = 1/2` and `x = -3`.'
     ],
     examTip: 'You can verify by substituting x = -3: 2(-3)² + 5(-3) - 3 = 2(9) - 15 - 3 = 18 - 18 = 0. Verified!'
-  },
-  'Summary of Chapter 3: The Rise of Nationalism in Europe': {
-    title: 'CBSE Social Science: Nationalism in Europe Summary',
-    steps: [
-      '**1. Frederic Sorrieu Vision**: Utopian democratic and social republics in Europe (1848).',
-      '**2. The French Revolution (1789)**: Created a sense of collective identity (la patrie, le citoyen, tricolour flag, unified weights).',
-      '**3. Napoleonic Civil Code (1804)**: Abolished feudal privileges, established equality before law, secured property rights.',
-      '**4. The Aristocracy & New Middle Class**: Industrialisation spurred a liberal middle class demanding nation-states with constitutions.',
-      '**5. Unifications**: Count Cavour & Garibaldi unified Italy (1861); Otto von Bismarck led Prussian unification of Germany (1871).'
-    ],
-    examTip: 'Key short questions often test Giuseppe Mazzini (Young Italy) and the Treaty of Vienna (1815).'
   }
 };
 
+// Clean Starter Classroom Chat (1 official teacher welcome)
 export const INITIAL_CLASS_CHATS = {
   '8A': [
     {
@@ -433,27 +343,9 @@ export const INITIAL_CLASS_CHATS = {
       sender: 'Priya Sharma (Class Teacher)',
       role: 'TEACHER',
       avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
-      time: '09:15 AM',
-      message: 'Good morning Class 8-A! Please download Chapter 4 Quadratic Formula notes from your Classroom Connect tab. We will review exercise 4.2 in 3rd period.',
+      time: '08:15 AM',
+      message: 'Welcome Class 8-A students. Check your notes tab for new Mathematics handouts and ask any homework questions here.',
       badge: 'Teacher Announcement'
-    },
-    {
-      id: 'cc_2',
-      sender: 'Aarav Sharma',
-      role: 'STUDENT',
-      avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
-      time: '09:22 AM',
-      message: 'Ma\'am, will Question 7 on discriminant derivation be part of today\'s quiz or tomorrow\'s test?',
-      badge: 'Student Doubt'
-    },
-    {
-      id: 'cc_3',
-      sender: 'Priya Sharma (Class Teacher)',
-      role: 'TEACHER',
-      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
-      time: '09:25 AM',
-      message: 'Today\'s quiz focuses on basic root factorization. Discriminant formula proofs will be in Monday\'s formal unit test.',
-      badge: 'Teacher Reply'
     }
   ]
 };

@@ -12,7 +12,10 @@ import {
   ArrowLeft,
   Calendar,
   Layers,
-  HelpCircle
+  HelpCircle,
+  Image as ImageIcon,
+  Eye,
+  X
 } from 'lucide-react';
 
 export default function ClassChatbox({ onBack }) {
@@ -26,6 +29,7 @@ export default function ClassChatbox({ onBack }) {
 
   const [activeTab, setActiveTab] = useState('handouts'); // 'handouts' | 'doubts'
   const [doubtText, setDoubtText] = useState('');
+  const [previewImageModal, setPreviewImageModal] = useState(null);
 
   const studentClassId = currentUser?.classId || '8A';
   const studentClassName = currentUser?.assignedClass || 'Class 8-A';
@@ -47,7 +51,7 @@ export default function ClassChatbox({ onBack }) {
   };
 
   const handleDownload = (note) => {
-    addToast(`Downloading "${note.title}" (${note.fileType})...`, 'info');
+    addToast(`Downloading "${note.title}" (${note.fileName || note.fileType || 'File'})...`, 'info');
   };
 
   return (
@@ -175,9 +179,27 @@ export default function ClassChatbox({ onBack }) {
                     </div>
 
                     <span className="text-[10px] font-extrabold text-slate-600 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
-                      {note.fileType}
+                      {note.fileType || 'PDF'}
                     </span>
                   </div>
+
+                  {/* Image Attachment Preview */}
+                  {note.fileData && (
+                    <div
+                      onClick={() => setPreviewImageModal(note.fileData)}
+                      className="cursor-pointer relative rounded-2xl overflow-hidden border border-slate-200/80 max-h-48 group shadow-xs"
+                    >
+                      <img
+                        src={note.fileData}
+                        alt={note.title}
+                        className="w-full h-36 object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-xs gap-1">
+                        <Eye className="w-4 h-4" />
+                        <span>Tap to view full image</span>
+                      </div>
+                    </div>
+                  )}
 
                   <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-2.5 rounded-2xl border border-slate-200/60">
                     {note.summary}
@@ -268,6 +290,28 @@ export default function ClassChatbox({ onBack }) {
           </div>
         )}
       </div>
+
+      {/* FULL-SCREEN IMAGE PREVIEW LIGHTBOX */}
+      {previewImageModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="relative max-w-md w-full bg-slate-950 rounded-3xl p-3 border border-white/20 shadow-2xl space-y-3">
+            <button
+              onClick={() => setPreviewImageModal(null)}
+              className="absolute top-4 right-4 z-10 w-9 h-9 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <img
+              src={previewImageModal}
+              alt="Handout Attachment"
+              className="w-full max-h-[70vh] object-contain rounded-2xl"
+            />
+            <div className="text-center">
+              <span className="text-xs text-slate-300 font-semibold">Handout Image Preview</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

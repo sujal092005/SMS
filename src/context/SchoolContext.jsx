@@ -303,6 +303,9 @@ export function SchoolProvider({ children }) {
     chapter,
     summary,
     fileType = 'PDF',
+    fileName = 'document.pdf',
+    fileSize = '1.2 MB',
+    fileData = null,
     targetClassId = '8A',
     targetClassName = 'Class 8-A'
   }) => {
@@ -315,6 +318,9 @@ export function SchoolProvider({ children }) {
       downloads: 0,
       summary: summary || `${chapter ? 'Chapter: ' + chapter + '. ' : ''}Uploaded for revision.`,
       fileType: fileType || 'PDF',
+      fileName: fileName || (fileType === 'IMAGE' ? 'image_handout.jpg' : 'study_notes.pdf'),
+      fileSize: fileSize || '1.5 MB',
+      fileData: fileData || null,
       targetClassId: targetClassId || '8A',
       targetClassName: targetClassName || (CLASSES_CONFIG.find(c => c.id === targetClassId)?.label || targetClassId)
     };
