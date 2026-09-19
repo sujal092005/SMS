@@ -21,7 +21,8 @@ export const INITIAL_USERS = {
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
     email: 'priya.sharma@ravsschool.edu',
     assignedClass: 'Class 8-A',
-    department: 'Mathematics'
+    department: 'Mathematics',
+    employeeId: 'EMP-T482'
   },
   student: {
     id: 'usr_student_01',
@@ -32,6 +33,7 @@ export const INITIAL_USERS = {
     avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
     email: 'aarav.s8a@ravsschool.edu',
     rollNumber: '8A-14',
+    classId: '8A',
     assignedBus: 'BUS-01',
     attendanceToday: 'PRESENT'
   },
@@ -152,6 +154,54 @@ export const INITIAL_ABSENT_FACULTY = [
   { id: 'fac_3', name: 'Mr. Amitav Ghosh', department: 'Social Sciences', leaveType: 'Personal Casual' }
 ];
 
+// Faculty / Teacher Campus Gate Attendance Logs
+export const INITIAL_TEACHER_ATTENDANCE_LOGS = [
+  {
+    id: 'tlog_1',
+    date: 'Today (19 Sep 2026)',
+    checkInTime: '07:42 AM',
+    gate: 'Main Campus Gate A (North)',
+    shift: 'Morning Shift (07:45 AM - 02:30 PM)',
+    status: 'ON_TIME',
+    assignedWing: 'Academic Block 2 • Room 204',
+    temperature: '98.4°F (Normal)',
+    remarks: 'Reported for 1st period Mathematics & Class 8-A morning roll-call.'
+  },
+  {
+    id: 'tlog_2',
+    date: '18 Sep 2026',
+    checkInTime: '07:40 AM',
+    gate: 'Main Campus Gate A (North)',
+    shift: 'Morning Shift (07:45 AM - 02:30 PM)',
+    status: 'ON_TIME',
+    assignedWing: 'Academic Block 2 • Room 204',
+    temperature: '98.2°F (Normal)',
+    remarks: 'Punched in on schedule.'
+  },
+  {
+    id: 'tlog_3',
+    date: '17 Sep 2026',
+    checkInTime: '07:51 AM',
+    gate: 'Science Wing Gate B',
+    shift: 'Morning Shift (07:45 AM - 02:30 PM)',
+    status: 'GRACE_PERIOD',
+    assignedWing: 'Senior STEM Lab',
+    temperature: '98.6°F (Normal)',
+    remarks: 'Checked in for Physics Lab session.'
+  },
+  {
+    id: 'tlog_4',
+    date: '16 Sep 2026',
+    checkInTime: '07:38 AM',
+    gate: 'Main Campus Gate A (North)',
+    shift: 'Morning Shift (07:45 AM - 02:30 PM)',
+    status: 'ON_TIME',
+    assignedWing: 'Academic Block 2 • Room 204',
+    temperature: '98.1°F (Normal)',
+    remarks: 'Routine check-in.'
+  }
+];
+
 export const INITIAL_NOTICES = [
   {
     id: 'not_1',
@@ -160,7 +210,7 @@ export const INITIAL_NOTICES = [
     category: 'Examinations',
     targetAudience: 'Students & Parents',
     badgeColor: 'blue',
-    content: 'The official datesheet for the Term 1 Mid-Term examinations has been finalized. Assessments commence from October 4th. Download syllabus revisions from the Student Hub.',
+    content: 'The official datesheet for the Term 1 Mid-Term examinations has been finalized. Assessments commence from October 4th. Download syllabus revisions from Classroom Connect.',
     pinned: true
   },
   {
@@ -203,7 +253,7 @@ export const INITIAL_BUSES = [
     driverName: 'Rajesh Kumar',
     driverPhone: '+91 98765 43210',
     route: 'Route #4 (South Corridor)',
-    status: 'STANDBY', // STANDBY or ON_ROUTE or COMPLETED
+    status: 'STANDBY',
     speed: 0,
     etaMinutes: 15,
     lastCoordinate: { lat: 28.61842, lng: 77.21568 },
@@ -262,7 +312,7 @@ export const INITIAL_FACULTY_CHATS = [
     sender: 'Dr. Arvind Sharma (Principal)',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     time: '08:05 AM',
-    message: 'Good morning faculty. Please ensure all 1st period roll-calls are synchronized by 08:30 AM for the administrative headcount audit.',
+    message: 'Good morning faculty. Please complete campus QR clock-in at the main gate and ensure all 1st period roll-calls are logged by 08:30 AM.',
     isSelf: false,
     roleTag: 'Admin'
   },
@@ -271,7 +321,7 @@ export const INITIAL_FACULTY_CHATS = [
     sender: 'Priya Sharma (Class 8-A)',
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
     time: '08:12 AM',
-    message: 'Class 8-A attendance has been submitted with 21 present, 3 absent. Mathematics syllabus revision handouts uploaded.',
+    message: 'Good morning. Checked in at Gate A. Uploaded Chapter 4 Quadratic Formula proofs specifically for Class 8-A students.',
     isSelf: true,
     roleTag: 'Teacher'
   },
@@ -286,6 +336,7 @@ export const INITIAL_FACULTY_CHATS = [
   }
 ];
 
+// Notes strictly targeted to specific classrooms to eliminate conflict
 export const INITIAL_CLASS_NOTES = [
   {
     id: 'cn_1',
@@ -294,6 +345,8 @@ export const INITIAL_CLASS_NOTES = [
     teacher: 'Priya Sharma',
     time: 'Yesterday, 02:40 PM',
     downloads: 38,
+    targetClassId: '8A',
+    targetClassName: 'Class 8-A',
     summary: 'Standard form ax² + bx + c = 0, derivation of discriminant Δ = b² - 4ac, and 10 practice problems for weekend submission.',
     fileType: 'PDF'
   },
@@ -304,6 +357,8 @@ export const INITIAL_CLASS_NOTES = [
     teacher: 'Kavita Chawla',
     time: '17 Sep 2026',
     downloads: 42,
+    targetClassId: '8A',
+    targetClassName: 'Class 8-A',
     summary: 'Light-dependent vs dark reactions, Calvin cycle basics, stomata regulation diagrams with labelled chloroplast anatomy.',
     fileType: 'PDF'
   },
@@ -314,7 +369,21 @@ export const INITIAL_CLASS_NOTES = [
     teacher: 'Sanjay Deshpande',
     time: '16 Sep 2026',
     downloads: 45,
+    targetClassId: '10A',
+    targetClassName: 'Class 10-A (CBSE)',
     summary: 'Treaty of Vienna (1815), French Revolution ripple effects, and unification milestones of Italy & Germany.',
+    fileType: 'PDF'
+  },
+  {
+    id: 'cn_4',
+    subject: 'Mathematics',
+    title: 'Class 5th Fractions & Decimals Visual Worksheets',
+    teacher: 'Sunita Sen',
+    time: '18 Sep 2026',
+    downloads: 20,
+    targetClassId: '5A',
+    targetClassName: 'Class 5-A',
+    summary: 'Step by step shading exercises for proper, improper and mixed fractions with real life fruit sharing examples.',
     fileType: 'PDF'
   }
 ];
@@ -361,12 +430,12 @@ export const INITIAL_CLASS_CHATS = {
   '8A': [
     {
       id: 'cc_1',
-      sender: 'Priya Sharma (Teacher)',
+      sender: 'Priya Sharma (Class Teacher)',
       role: 'TEACHER',
       avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
       time: '09:15 AM',
-      message: 'Good morning Class 8-A! Please review Exercise 4.2 in your NCERT exemplar. We will conduct a short problem-solving quiz in period 3.',
-      badge: 'Teacher Notice'
+      message: 'Good morning Class 8-A! Please download Chapter 4 Quadratic Formula notes from your Classroom Connect tab. We will review exercise 4.2 in 3rd period.',
+      badge: 'Teacher Announcement'
     },
     {
       id: 'cc_2',
@@ -375,11 +444,11 @@ export const INITIAL_CLASS_CHATS = {
       avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
       time: '09:22 AM',
       message: 'Ma\'am, will Question 7 on discriminant derivation be part of today\'s quiz or tomorrow\'s test?',
-      badge: 'Student Query'
+      badge: 'Student Doubt'
     },
     {
       id: 'cc_3',
-      sender: 'Priya Sharma (Teacher)',
+      sender: 'Priya Sharma (Class Teacher)',
       role: 'TEACHER',
       avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
       time: '09:25 AM',
@@ -388,4 +457,3 @@ export const INITIAL_CLASS_CHATS = {
     }
   ]
 };
-

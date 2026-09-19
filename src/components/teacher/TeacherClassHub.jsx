@@ -1,450 +1,426 @@
 import React, { useState } from 'react';
 import { useSchool } from '../../context/SchoolContext';
-import { 
-  BookOpen, 
-  Upload, 
-  FileText, 
-  Send, 
-  Bell, 
-  MessageSquare, 
-  ArrowLeft, 
-  Plus, 
-  Sparkles, 
-  CheckCircle2, 
-  ChevronDown,
-  Paperclip,
-  Download
+import {
+  BookOpen,
+  UploadCloud,
+  FileText,
+  MessageSquare,
+  Users,
+  Send,
+  CheckCircle2,
+  ArrowLeft,
+  Filter,
+  Sparkles,
+  Download,
+  AlertCircle,
+  Clock,
+  Layers
 } from 'lucide-react';
 
 export default function TeacherClassHub({ onBack }) {
-  const { 
-    classesList, 
-    selectedClassId, 
-    setSelectedClassId,
-    classNotes, 
-    uploadClassNote,
-    publishClassNotice,
-    classChats,
-    sendClassChatMessage,
+  const {
     currentUser,
-    notices
+    classesList,
+    classNotes,
+    uploadClassNote,
+    classChats,
+    sendClassTeacherMessage,
+    addToast
   } = useSchool();
 
-  const [activeTab, setActiveTab] = useState('notes'); // 'notes' | 'notices' | 'chat'
-  
-  // Note Form State
-  const [noteSubject, setNoteSubject] = useState('Mathematics');
-  const [noteTitle, setNoteTitle] = useState('');
-  const [noteChapter, setNoteChapter] = useState('');
-  const [noteSummary, setNoteSummary] = useState('');
+  const [activeTab, setActiveTab] = useState('upload'); // 'upload' | 'interact'
+  const [selectedFilterClass, setSelectedFilterClass] = useState('ALL');
 
-  // Notice Form State
-  const [noticeTitle, setNoticeTitle] = useState('');
-  const [noticeContent, setNoticeContent] = useState('');
-  const [noticePriority, setNoticePriority] = useState('Normal');
+  // Upload Form State
+  const [subject, setSubject] = useState('Mathematics');
+  const [targetClassId, setTargetClassId] = useState('8A');
+  const [title, setTitle] = useState('');
+  const [chapter, setChapter] = useState('');
+  const [summary, setSummary] = useState('');
+  const [fileType, setFileType] = useState('PDF');
 
-  // Chat Input State
-  const [chatInput, setChatInput] = useState('');
+  // Teacher Reply State
+  const [replyText, setReplyText] = useState('');
+  const [replyClassId, setReplyClassId] = useState('8A');
 
-  const currentClassObj = classesList.find((c) => c.id === selectedClassId) || classesList[3];
-  const currentChats = classChats[selectedClassId] || [];
+  const subjects = [
+    'Mathematics',
+    'Science (Physics)',
+    'Science (Chemistry)',
+    'Science (Biology)',
+    'English Literature',
+    'Social Science (History)',
+    'Hindi',
+    'Computer Science'
+  ];
 
-  // Filter notes for selected class or general
-  const filteredNotes = classNotes.filter(
-    (n) => !n.classId || n.classId === selectedClassId || n.classId === '8A'
-  );
-
-  const handleUploadNoteSubmit = (e) => {
+  const handleUploadSubmit = (e) => {
     e.preventDefault();
-    if (!noteTitle.trim()) return;
+    if (!title.trim()) {
+      addToast('Please provide a document title', 'error');
+      return;
+    }
+
+    const matchedClass = classesList.find((c) => c.id === targetClassId);
+    const targetClassName = matchedClass ? matchedClass.label : (targetClassId === 'ALL' ? 'All Classes' : targetClassId);
 
     uploadClassNote({
-      subject: noteSubject,
-      title: noteTitle.trim(),
-      chapter: noteChapter.trim(),
-      summary: noteSummary.trim() || 'Uploaded by subject teacher for term revision.',
-      fileType: 'PDF',
-      classId: selectedClassId
+      subject,
+      title: title.trim(),
+      chapter: chapter.trim(),
+      summary: summary.trim(),
+      fileType,
+      targetClassId,
+      targetClassName
     });
 
-    setNoteTitle('');
-    setNoteChapter('');
-    setNoteSummary('');
+    // Reset fields
+    setTitle('');
+    setChapter('');
+    setSummary('');
   };
 
-  const handlePublishNoticeSubmit = (e) => {
+  const handleSendTeacherMessage = (e) => {
     e.preventDefault();
-    if (!noticeTitle.trim()) return;
+    if (!replyText.trim()) return;
 
-    publishClassNotice({
-      title: noticeTitle.trim(),
-      content: noticeContent.trim() || 'Please refer to classroom guidelines for this notice.',
-      targetClass: currentClassObj.label,
-      priority: noticePriority
-    });
-
-    setNoticeTitle('');
-    setNoticeContent('');
+    sendClassTeacherMessage(replyClassId, replyText, true, 'Teacher Announcement');
+    setReplyText('');
+    addToast(`Message sent to ${classesList.find(c => c.id === replyClassId)?.label || replyClassId}!`, 'success');
   };
 
-  const handleSendChat = (e) => {
-    e.preventDefault();
-    if (!chatInput.trim()) return;
+  // Filter notes
+  const displayedNotes = selectedFilterClass === 'ALL'
+    ? classNotes
+    : classNotes.filter((n) => n.targetClassId === selectedFilterClass || n.targetClassId === 'ALL');
 
-    sendClassChatMessage(selectedClassId, chatInput.trim());
-    setChatInput('');
-  };
+  const currentClassMessages = classChats[replyClassId] || [];
 
   return (
-    <div className="flex-1 flex flex-col p-4 bg-[#FAF8FF] pb-28 space-y-4">
-      {/* Top Header */}
-      <div className="flex flex-col gap-2">
+    <div className="flex-1 flex flex-col bg-[#FAF8FF] pb-24">
+      {/* Sticky Header */}
+      <div className="bg-white border-b border-slate-200/90 p-4 sticky top-0 z-20">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {onBack && (
               <button
                 onClick={onBack}
-                className="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-700 active:scale-95 transition-all shadow-xs"
+                className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 hover:bg-slate-200 active:scale-95 transition-all"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="w-5 h-5" />
               </button>
             )}
             <div>
-              <h1 className="text-xl font-extrabold text-[#00236F] tracking-tight">Class Study Hub</h1>
-              <p className="text-xs text-slate-500">Teacher ↔ Student Notes & Announcements</p>
+              <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
+                Academic Distribution & Student Interaction
+              </span>
+              <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
+                Classroom Portal & Notes
+              </h1>
             </div>
           </div>
 
-          {/* Class Dropdown */}
-          <div className="relative">
-            <select
-              value={selectedClassId}
-              onChange={(e) => setSelectedClassId(e.target.value)}
-              className="appearance-none bg-white border border-blue-200 text-[#00236F] font-bold text-xs py-1.5 pl-3 pr-7 rounded-xl shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-600"
-            >
-              {classesList.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="w-3.5 h-3.5 text-blue-700 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
+          <span className="text-xs font-bold text-slate-700 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+            {currentUser?.assignedClass || 'Class 8-A'}
+          </span>
+        </div>
+
+        {/* Tab Switcher */}
+        <div className="flex items-center gap-2 mt-3 bg-slate-100 p-1 rounded-2xl border border-slate-200/80">
+          <button
+            onClick={() => setActiveTab('upload')}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'upload'
+                ? 'bg-white text-amber-800 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <UploadCloud className="w-3.5 h-3.5" />
+            <span>Upload Notes (Class Selector)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('interact')}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'interact'
+                ? 'bg-white text-amber-800 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>Class Teacher & Student Chat</span>
+          </button>
         </div>
       </div>
 
-      {/* Tabs Switcher */}
-      <div className="grid grid-cols-3 bg-slate-100/90 p-1 rounded-2xl border border-slate-200">
-        <button
-          onClick={() => setActiveTab('notes')}
-          className={`flex items-center justify-center gap-1.5 py-2 rounded-xl font-bold text-xs transition-all ${
-            activeTab === 'notes'
-              ? 'bg-white text-[#00236F] shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <BookOpen className="w-4 h-4" />
-          <span>Upload Notes</span>
-        </button>
+      <div className="p-4 space-y-4">
+        {/* TAB 1: UPLOAD NOTES WITH CLASSROOM TARGETING */}
+        {activeTab === 'upload' && (
+          <div className="space-y-4">
+            {/* Upload Card */}
+            <form onSubmit={handleUploadSubmit} className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-xs space-y-3.5">
+              <div className="border-b border-slate-100 pb-2">
+                <h2 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                  <UploadCloud className="w-4 h-4 text-amber-600" />
+                  <span>Publish Study Notes to Specific Class</span>
+                </h2>
+                <p className="text-[11px] text-slate-500">
+                  Select the exact classroom so notes go only to intended students with zero conflict.
+                </p>
+              </div>
 
-        <button
-          onClick={() => setActiveTab('notices')}
-          className={`flex items-center justify-center gap-1.5 py-2 rounded-xl font-bold text-xs transition-all ${
-            activeTab === 'notices'
-              ? 'bg-white text-[#00236F] shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Bell className="w-4 h-4" />
-          <span>Class Notice</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('chat')}
-          className={`flex items-center justify-center gap-1.5 py-2 rounded-xl font-bold text-xs transition-all ${
-            activeTab === 'chat'
-              ? 'bg-white text-[#00236F] shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <MessageSquare className="w-4 h-4" />
-          <span>Student Q&A</span>
-        </button>
-      </div>
-
-      {/* TAB 1: UPLOAD CLASS NOTES */}
-      {activeTab === 'notes' && (
-        <div className="space-y-4">
-          {/* Note Upload Card */}
-          <form onSubmit={handleUploadNoteSubmit} className="bg-white rounded-3xl p-4 border border-slate-200 shadow-xs space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                <Upload className="w-4 h-4 text-blue-600" />
-                <span>Upload Handout for {currentClassObj.label}</span>
-              </span>
-              <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
-                NCERT Aligned
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Subject</label>
+              {/* Target Classroom Selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-extrabold text-slate-800 flex items-center gap-1">
+                  <Layers className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Target Classroom (Select Class)</span>
+                  <span className="text-rose-500">*</span>
+                </label>
                 <select
-                  value={noteSubject}
-                  onChange={(e) => setNoteSubject(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  value={targetClassId}
+                  onChange={(e) => setTargetClassId(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-amber-300 bg-amber-50/50 text-xs font-bold text-amber-950 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 >
-                  <option>Mathematics</option>
-                  <option>Science (Physics)</option>
-                  <option>Science (Chemistry)</option>
-                  <option>Science (Biology)</option>
-                  <option>Social Science</option>
-                  <option>English Literature</option>
-                  <option>Computer Science</option>
+                  <option value="ALL">🌐 All Classes (School-Wide)</option>
+                  {classesList.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label} ({c.category}) — {c.strength} Students
+                    </option>
+                  ))}
                 </select>
               </div>
 
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Chapter / Unit</label>
+              {/* Subject & File Type */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-800">Subject</label>
+                  <select
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    {subjects.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-800">File Type</label>
+                  <select
+                    value={fileType}
+                    onChange={(e) => setFileType(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="PDF">PDF Handout</option>
+                    <option value="DOCX">Word Document (.docx)</option>
+                    <option value="SLIDES">PowerPoint Slides (.pptx)</option>
+                    <option value="ZIP">Question Bank Archive (.zip)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Document Title */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-800">Document Title</label>
                 <input
                   type="text"
-                  placeholder="e.g. Chapter 4"
-                  value={noteChapter}
-                  onChange={(e) => setNoteChapter(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  placeholder="e.g. Chapter 4 Quadratic Formula Derivations & Examples"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
-            </div>
 
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Title & Description</label>
-              <input
-                type="text"
-                placeholder="Topic Title (e.g. Quadratic Equations & Formulas)..."
-                value={noteTitle}
-                onChange={(e) => setNoteTitle(e.target.value)}
-                required
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600 mb-2"
-              />
-              <textarea
-                placeholder="Summary notes, formulas, homework question list..."
-                value={noteSummary}
-                onChange={(e) => setNoteSummary(e.target.value)}
-                rows={2}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none"
-              />
-            </div>
+              {/* Chapter / Topic */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-800">Chapter / Topic</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Chapter 4: Quadratic Equations"
+                  value={chapter}
+                  onChange={(e) => setChapter(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
 
-            <div className="flex items-center justify-between pt-1">
-              <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
-                <Paperclip className="w-3.5 h-3.5 text-slate-400" />
-                <span>Format: PDF / Docx / Slides</span>
+              {/* Highlights Summary */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-800">Summary & Study Instructions</label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Contains step-by-step discriminant formula proofs and 10 practice problems for Friday submission."
+                  value={summary}
+                  onChange={(e) => setSummary(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
               </div>
 
               <button
                 type="submit"
-                className="px-4 py-2 bg-[#00236F] hover:bg-blue-900 text-white rounded-xl text-xs font-bold active:scale-95 transition-all shadow-xs flex items-center gap-1"
+                className="w-full py-3 rounded-2xl bg-amber-600 hover:bg-amber-700 active:scale-98 text-white font-extrabold text-xs shadow-md shadow-amber-600/20 transition-all flex items-center justify-center gap-2"
               >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Upload Note</span>
+                <UploadCloud className="w-4 h-4" />
+                <span>Publish Notes to Selected Classroom</span>
               </button>
-            </div>
-          </form>
+            </form>
 
-          {/* Uploaded Notes Feed */}
-          <div className="space-y-2">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-              Active Handouts in {currentClassObj.label} ({filteredNotes.length})
-            </span>
+            {/* Uploaded Handouts Directory */}
+            <div className="bg-white rounded-3xl p-4 border border-slate-200/90 shadow-xs space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div className="flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-amber-600" />
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                    Published Class Notes
+                  </h3>
+                </div>
 
-            {filteredNotes.map((note) => (
-              <div
-                key={note.id}
-                className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-xs space-y-2 hover:border-blue-200 transition-all"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center border border-blue-100 shrink-0">
-                      <FileText className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">
-                        {note.subject}
+                {/* Filter Selector */}
+                <select
+                  value={selectedFilterClass}
+                  onChange={(e) => setSelectedFilterClass(e.target.value)}
+                  className="text-[11px] font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200 focus:outline-none"
+                >
+                  <option value="ALL">Show All Classes</option>
+                  {classesList.map((c) => (
+                    <option key={c.id} value={c.id}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2.5">
+                {displayedNotes.map((note) => (
+                  <div
+                    key={note.id}
+                    className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                            {note.targetClassName || note.targetClassId}
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                            {note.subject}
+                          </span>
+                        </div>
+                        <h4 className="text-xs font-bold text-slate-900 mt-1">{note.title}</h4>
+                      </div>
+
+                      <span className="text-[10px] font-extrabold text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
+                        {note.fileType}
                       </span>
-                      <h4 className="text-xs font-bold text-slate-900 leading-snug">{note.title}</h4>
+                    </div>
+
+                    <p className="text-[11px] text-slate-500">{note.summary}</p>
+
+                    <div className="flex items-center justify-between text-[10.5px] text-slate-400 border-t border-slate-200/60 pt-2">
+                      <span>Uploaded by {note.teacher} • {note.time}</span>
+                      <span className="font-semibold text-indigo-600">{note.downloads} Downloads</span>
                     </div>
                   </div>
-
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
-                    {note.fileType || 'PDF'}
-                  </span>
-                </div>
-
-                <p className="text-xs text-slate-600 line-clamp-2">{note.summary}</p>
-
-                <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px] text-slate-500">
-                  <span>By {note.teacher} • {note.time}</span>
-                  <span className="flex items-center gap-1 font-semibold text-blue-700">
-                    <Download className="w-3 h-3" />
-                    <span>{note.downloads} Downloads</span>
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: POST CLASS NOTICE */}
-      {activeTab === 'notices' && (
-        <div className="space-y-4">
-          <form onSubmit={handlePublishNoticeSubmit} className="bg-white rounded-3xl p-4 border border-slate-200 shadow-xs space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                <Bell className="w-4 h-4 text-emerald-600" />
-                <span>Broadcast Class Circular</span>
-              </span>
-              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                Target: {currentClassObj.label}
-              </span>
-            </div>
-
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Notice Heading</label>
-              <input
-                type="text"
-                placeholder="e.g. Bring Geometry Instrument Box for Period 2..."
-                value={noticeTitle}
-                onChange={(e) => setNoticeTitle(e.target.value)}
-                required
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600"
-              />
-            </div>
-
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Notice Content</label>
-              <textarea
-                placeholder="Details of instructions, date, homework expectation..."
-                value={noticeContent}
-                onChange={(e) => setNoticeContent(e.target.value)}
-                rows={3}
-                required
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 resize-none"
-              />
-            </div>
-
-            <div className="flex items-center justify-between pt-1">
-              <div className="flex items-center gap-1">
-                {['Normal', 'Important', 'Urgent'].map((pri) => (
-                  <button
-                    key={pri}
-                    type="button"
-                    onClick={() => setNoticePriority(pri)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                      noticePriority === pri
-                        ? pri === 'Urgent'
-                          ? 'bg-rose-600 text-white'
-                          : pri === 'Important'
-                          ? 'bg-amber-600 text-white'
-                          : 'bg-[#00236F] text-white'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    {pri}
-                  </button>
                 ))}
               </div>
-
-              <button
-                type="submit"
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold active:scale-95 transition-all shadow-xs flex items-center gap-1"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Publish</span>
-              </button>
             </div>
-          </form>
-
-          {/* Active Notices Feed */}
-          <div className="space-y-2">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-              Recent Announcements
-            </span>
-
-            {notices.slice(0, 4).map((n) => (
-              <div key={n.id} className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-xs space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-900">{n.title}</span>
-                  <span className="text-[10px] font-semibold text-slate-400">{n.date}</span>
-                </div>
-                <p className="text-xs text-slate-600">{n.content}</p>
-              </div>
-            ))}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* TAB 3: TWO-WAY CLASS CHAT (TEACHER ↔ STUDENTS) */}
-      {activeTab === 'chat' && (
-        <div className="flex-1 flex flex-col space-y-3">
-          <div className="bg-blue-50/80 rounded-2xl p-2.5 border border-blue-200 flex items-center justify-between text-xs text-blue-900">
-            <span>Direct Doubt & Discussion Channel for {currentClassObj.label}</span>
-            <span className="font-bold bg-white px-2 py-0.5 rounded-full border border-blue-200 text-[10px]">
-              {currentChats.length} Messages
-            </span>
-          </div>
-
-          <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
-            {currentChats.length === 0 ? (
-              <div className="text-center py-8 text-xs text-slate-400 bg-white rounded-2xl border border-slate-200 p-4">
-                No questions yet in {currentClassObj.label}. Start by posting a classroom discussion prompt!
-              </div>
-            ) : (
-              currentChats.map((chat) => (
-                <div
-                  key={chat.id}
-                  className={`p-3 rounded-2xl border transition-all ${
-                    chat.role === 'TEACHER'
-                      ? 'bg-blue-50/70 border-blue-200 mr-4'
-                      : 'bg-white border-slate-200 ml-4 shadow-xs'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-slate-900">{chat.sender}</span>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${
-                        chat.role === 'TEACHER' ? 'bg-[#00236F] text-white' : 'bg-slate-100 text-slate-700'
-                      }`}>
-                        {chat.badge || chat.role}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-slate-400">{chat.time}</span>
+        {/* TAB 2: CLASS TEACHER & STUDENT INTERACTION */}
+        {activeTab === 'interact' && (
+          <div className="space-y-4">
+            {/* Classroom Selector Card */}
+            <div className="bg-white rounded-3xl p-4 border border-slate-200/90 shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center font-bold">
+                    <Users className="w-5 h-5" />
                   </div>
-                  <p className="text-xs text-slate-700">{chat.message}</p>
+                  <div>
+                    <h2 className="text-xs font-extrabold text-slate-900">Class Incharge Communication</h2>
+                    <p className="text-[11px] text-slate-500">Interact with students of your assigned classroom.</p>
+                  </div>
                 </div>
-              ))
-            )}
-          </div>
 
-          {/* Chat Input */}
-          <form onSubmit={handleSendChat} className="flex items-center gap-2 bg-white rounded-2xl p-2 border border-slate-200 shadow-xs">
-            <input
-              type="text"
-              placeholder={`Send message to students in ${currentClassObj.label}...`}
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              className="flex-1 px-3 py-2 text-xs bg-slate-50 rounded-xl text-slate-900 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600"
-            />
-            <button
-              type="submit"
-              className="p-2.5 bg-[#00236F] hover:bg-blue-900 text-white rounded-xl active:scale-95 transition-all shadow-xs"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
-        </div>
-      )}
+                <select
+                  value={replyClassId}
+                  onChange={(e) => setReplyClassId(e.target.value)}
+                  className="text-xs font-bold text-amber-900 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 focus:outline-none"
+                >
+                  {classesList.map((c) => (
+                    <option key={c.id} value={c.id}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Conversation Feed */}
+            <div className="bg-white rounded-3xl p-4 border border-slate-200/90 shadow-xs space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <span className="text-xs font-bold text-slate-800">
+                  {classesList.find(c => c.id === replyClassId)?.label} Student Discussion Feed
+                </span>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  Live Classroom Hub
+                </span>
+              </div>
+
+              <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+                {currentClassMessages.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400 text-xs">
+                    No doubts or questions posted for this class yet.
+                  </div>
+                ) : (
+                  currentClassMessages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`p-3 rounded-2xl border flex flex-col gap-1 ${
+                        msg.role === 'TEACHER'
+                          ? 'bg-amber-50/70 border-amber-200 ml-4'
+                          : 'bg-slate-50 border-slate-200/80 mr-4'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-slate-900">{msg.sender}</span>
+                          <span
+                            className={`text-[9.5px] font-bold px-1.5 py-0.2 rounded ${
+                              msg.role === 'TEACHER'
+                                ? 'bg-amber-200 text-amber-900'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}
+                          >
+                            {msg.badge || (msg.role === 'TEACHER' ? 'Teacher' : 'Student')}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-400">{msg.time}</span>
+                      </div>
+
+                      <p className="text-xs text-slate-800 font-medium">{msg.message}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Teacher Broadcast / Reply Input Form */}
+              <form onSubmit={handleSendTeacherMessage} className="pt-2 border-t border-slate-100 flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder={`Post announcement or reply to ${classesList.find(c => c.id === replyClassId)?.label}...`}
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  className="flex-1 p-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+                <button
+                  type="submit"
+                  className="p-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 active:scale-95 text-white shadow-xs transition-all"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

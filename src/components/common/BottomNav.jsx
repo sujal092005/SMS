@@ -7,10 +7,12 @@ import {
   MessageSquare, 
   Bus, 
   Sparkles, 
-  FileText, 
+  BookOpen,
   MapPin, 
   Navigation,
-  UserCheck
+  UserCheck,
+  QrCode,
+  Users
 } from 'lucide-react';
 
 export default function BottomNav({ currentTab, onTabChange }) {
@@ -21,25 +23,24 @@ export default function BottomNav({ currentTab, onTabChange }) {
       case 'ADMIN':
         return [
           { id: 'home', label: 'Overview', icon: LayoutDashboard },
-          { id: 'attendance', label: 'Attendance', icon: CheckSquare },
-          { id: 'notices', label: 'Notices', icon: Bell },
-          { id: 'chat', label: 'Chat', icon: MessageSquare },
+          { id: 'attendance', label: 'Faculty Check-In', icon: QrCode },
+          { id: 'notices', label: 'Circulars', icon: Bell },
+          { id: 'chat', label: 'Faculty Chat', icon: MessageSquare },
           { id: 'fleet', label: 'Fleet GPS', icon: Bus },
         ];
       case 'TEACHER':
         return [
           { id: 'home', label: 'Home', icon: LayoutDashboard },
-          { id: 'attendance', label: 'QR Attendance', icon: CheckSquare },
-          { id: 'hub', label: 'Study Hub', icon: FileText },
-          { id: 'chat', label: 'Faculty', icon: MessageSquare },
+          { id: 'attendance', label: 'Gate QR Clock-In', icon: QrCode },
+          { id: 'hub', label: 'Classroom Portal', icon: BookOpen },
+          { id: 'chat', label: 'Faculty Lounge', icon: MessageSquare },
         ];
-
       case 'STUDENT':
         return [
           { id: 'home', label: 'Home', icon: LayoutDashboard },
           { id: 'ai_doubt', label: 'Ask AI', icon: Sparkles, highlight: true },
-          { id: 'notes', label: 'Class Notes', icon: FileText },
-          { id: 'notices', label: 'Notices', icon: Bell },
+          { id: 'notes', label: 'Classroom Connect', icon: BookOpen },
+          { id: 'notices', label: 'Circulars', icon: Bell },
         ];
       case 'PARENT':
         return [
