@@ -18,6 +18,7 @@ import {
   syncNotesToCloud, 
   sendFacultyChatMessage 
 } from '../services/firebase';
+import { askGeminiTutor } from '../services/gemini';
 
 const SchoolContext = createContext();
 
@@ -121,16 +122,26 @@ export function SchoolProvider({ children }) {
     validShift: 'Morning Shift'
   });
 
-  // AI Study Assistant Chat
+  // AI Study Assistant Chat & Gemini API Key Configuration
+  const [geminiApiKey, setGeminiApiKey] = useState(() => {
+    return localStorage.getItem('ravs_gemini_api_key') || import.meta.env.VITE_GEMINI_API_KEY || '';
+  });
+
   const [aiMessages, setAiMessages] = useState([
     {
       id: 'ai_welcome',
       sender: 'assistant',
-      text: 'Hello! I am your RAVS AI Study Assistant. Ask me anything related to your syllabus, chapter explanations, or exam problem solving!',
+      text: 'Hello! I am your RAVS AI Study Assistant powered by Google Gemini. Ask me any CBSE syllabus question, math derivation, or science concept!',
       timestamp: 'Just now'
     }
   ]);
   const [isAiThinking, setIsAiThinking] = useState(false);
+
+  const updateGeminiApiKey = (newKey) => {
+    setGeminiApiKey(newKey);
+    localStorage.setItem('ravs_gemini_api_key', newKey);
+    addToast('Gemini API key updated successfully!', 'success');
+  };
 
   // Toast notifications
   const [toasts, setToasts] = useState([]);
@@ -478,9 +489,10 @@ export function SchoolProvider({ children }) {
     addToast('Trip Completed! Bus telemetry returned to standby', 'info');
   };
 
-  // AI Assistant
-  const askAIDoubt = (questionText) => {
+  // AI Assistant with live Google Gemini API
+  const askAIDoubt = async (questionText) => {
     if (!questionText.trim()) return;
+
     const userMsg = {
       id: 'usr_' + Date.now(),
       sender: 'user',
@@ -490,6 +502,26 @@ export function SchoolProvider({ children }) {
     setAiMessages((prev) => [...prev, userMsg]);
     setIsAiThinking(true);
 
+    // Try Google Gemini AI Cloud API first
+    const geminiResponse = await askGeminiTutor(questionText, geminiApiKey);
+
+    if (geminiResponse) {
+      const assistantMsg = {
+        id: 'ai_' + Date.now(),
+        sender: 'assistant',
+        title: geminiResponse.title,
+        steps: geminiResponse.steps,
+        examTip: geminiResponse.examTip,
+        text: geminiResponse.text,
+        isGeminiLive: true,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setAiMessages((prev) => [...prev, assistantMsg]);
+      setIsAiThinking(false);
+      return;
+    }
+
+    // Fallback to offline educational knowledge engine
     setTimeout(() => {
       const matchedKey = Object.keys(PRESET_AI_KNOWLEDGE).find((k) =>
         questionText.toLowerCase().includes(k.toLowerCase()) ||
@@ -522,7 +554,7 @@ export function SchoolProvider({ children }) {
       };
       setAiMessages((prev) => [...prev, assistantMsg]);
       setIsAiThinking(false);
-    }, 900);
+    }, 700);
   };
 
   return (
@@ -579,7 +611,9 @@ export function SchoolProvider({ children }) {
         // Class Teacher <-> Student Interaction
         classChats,
         sendClassTeacherMessage,
-        // AI Assistant
+        // AI Assistant & Gemini Config
+        geminiApiKey,
+        updateGeminiApiKey,
         aiMessages,
         isAiThinking,
         askAIDoubt,
