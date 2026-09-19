@@ -2,11 +2,14 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import {
   INITIAL_USERS,
   INITIAL_STUDENTS_8A,
+  INITIAL_MULTI_CLASS_ROSTER,
+  CLASSES_CONFIG,
   INITIAL_ABSENT_FACULTY,
   INITIAL_NOTICES,
   INITIAL_BUSES,
   INITIAL_FACULTY_CHATS,
   INITIAL_CLASS_NOTES,
+  INITIAL_CLASS_CHATS,
   PRESET_AI_KNOWLEDGE
 } from '../mockData/schoolData';
 
@@ -69,6 +72,33 @@ export function SchoolProvider({ children }) {
     const saved = localStorage.getItem('ravs_class_notes');
     return saved ? JSON.parse(saved) : INITIAL_CLASS_NOTES;
   });
+
+  // Multi-Class Management (Classes 5th to 12th)
+  const [selectedClassId, setSelectedClassId] = useState('8A');
+  const [multiClassRoster, setMultiClassRoster] = useState(() => {
+    const saved = localStorage.getItem('ravs_multi_class_roster');
+    return saved ? JSON.parse(saved) : INITIAL_MULTI_CLASS_ROSTER;
+  });
+
+  const [classChats, setClassChats] = useState(() => {
+    const saved = localStorage.getItem('ravs_class_chats');
+    return saved ? JSON.parse(saved) : INITIAL_CLASS_CHATS;
+  });
+
+  // Active QR Attendance Session
+  const [activeQrSession, setActiveQrSession] = useState({
+    classId: '8A',
+    sessionCode: '8942',
+    token: 'RAVS-8A-8942',
+    expiresAt: '10:45 AM',
+    active: true
+  });
+
+  const [qrScannedLogs, setQrScannedLogs] = useState([
+    { roll: '8A-14', name: 'Aarav Sharma', time: '08:14 AM' },
+    { roll: '8A-01', name: 'Aakash Mehra', time: '08:16 AM' },
+    { roll: '8A-05', name: 'Bhavna Kulkarni', time: '08:18 AM' }
+  ]);
 
   // AI Study Assistant Chat
   const [aiMessages, setAiMessages] = useState([
@@ -190,10 +220,12 @@ export function SchoolProvider({ children }) {
     setStudents8A((prev) =>
       prev.map((s) => (s.id === studentId ? { ...s, status } : s))
     );
+    setClassStudentStatus('8A', studentId, status);
   };
 
   const markAllStudentsPresent = () => {
     setStudents8A((prev) => prev.map((s) => ({ ...s, status: 'PRESENT' })));
+    markAllClassStudentsPresent('8A');
     addToast('Marked all 24 students as Present', 'info');
   };
 
@@ -204,6 +236,143 @@ export function SchoolProvider({ children }) {
     broadcastEvent('ATTENDANCE_UPDATED', { students: students8A, time: nowStr });
     addToast('Attendance submitted and synchronized with School Cloud!', 'success');
   };
+
+  // Multi-Class methods
+  const setClassStudentStatus = (classId, studentId, status) => {
+    setMultiClassRoster((prev) => {
+      const list = prev[classId] || [];
+      const updated = {
+        ...prev,
+        [classId]: list.map((s) => (s.id === studentId ? { ...s, status } : s))
+      };
+      localStorage.setItem('ravs_multi_class_roster', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const markAllClassStudentsPresent = (classId) => {
+    setMultiClassRoster((prev) => {
+      const list = prev[classId] || [];
+      const updated = {
+        ...prev,
+        [classId]: list.map((s) => ({ ...s, status: 'PRESENT' }))
+      };
+      localStorage.setItem('ravs_multi_class_roster', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // QR Session generator & validator
+  const regenerateQRSession = (classId = '8A') => {
+    const pin = String(Math.floor(1000 + Math.random() * 9000));
+    const newSession = {
+      classId,
+      sessionCode: pin,
+      token: `RAVS-${classId}-${pin}`,
+      expiresAt: '11:00 AM',
+      active: true
+    };
+    setActiveQrSession(newSession);
+    addToast(`New QR Session active: PIN ${pin}`, 'info');
+    return newSession;
+  };
+
+  // QR check-in by student (self or camera scanned)
+  const markStudentAttendanceByQR = (identifier, targetClass = '8A') => {
+    const list = multiClassRoster[targetClass] || students8A;
+    const cleanId = String(identifier).trim().toUpperCase();
+
+    // Check if input matches roll, id, name or session pin
+    let found = list.find((s) =>
+      s.roll.toUpperCase() === cleanId ||
+      s.id.toUpperCase() === cleanId ||
+      s.name.toUpperCase().includes(cleanId)
+    );
+
+    if (!found && (cleanId === activeQrSession.sessionCode || cleanId.includes(activeQrSession.sessionCode))) {
+      found = list.find((s) => s.isFeatured || s.roll === '8A-14') || list[0];
+    }
+
+    if (found) {
+      setClassStudentStatus(targetClass, found.id, 'PRESENT');
+      if (targetClass === '8A') {
+        setStudents8A((prev) => prev.map((s) => (s.id === found.id ? { ...s, status: 'PRESENT' } : s)));
+      }
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setQrScannedLogs((prev) => [
+        { roll: found.roll, name: found.name, time: timeStr },
+        ...prev.filter((l) => l.roll !== found.roll)
+      ]);
+      addToast(`Verified! ${found.name} (${found.roll}) marked Present`, 'success');
+      return { success: true, student: found };
+    } else {
+      addToast(`Student or Code "${cleanId}" not recognized`, 'error');
+      return { success: false, message: 'Student not found in active class' };
+    }
+  };
+
+  // Upload Class Note
+  const uploadClassNote = ({ subject, title, chapter, summary, fileType = 'PDF', classId = '8A' }) => {
+    const newNote = {
+      id: 'cn_' + Date.now(),
+      subject: subject || 'General',
+      title: title || 'Class Study Material',
+      teacher: currentUser?.name || 'Class Teacher',
+      time: 'Just now',
+      downloads: 0,
+      summary: summary || `${chapter ? 'Chapter: ' + chapter + '. ' : ''}Uploaded for class revision.`,
+      fileType: fileType || 'PDF',
+      classId
+    };
+    setClassNotes((prev) => {
+      const updated = [newNote, ...prev];
+      localStorage.setItem('ravs_class_notes', JSON.stringify(updated));
+      return updated;
+    });
+    addToast(`Handout "${newNote.title}" uploaded to class portal!`, 'success');
+  };
+
+  // Post Class Notice
+  const publishClassNotice = ({ title, content, targetClass = 'Class 8-A', priority = 'Normal' }) => {
+    const noticeObj = {
+      id: 'not_' + Date.now(),
+      title,
+      content,
+      category: 'Class Notice',
+      date: 'Just now',
+      pinned: priority === 'Urgent',
+      badgeColor: priority === 'Urgent' ? 'rose' : priority === 'Important' ? 'amber' : 'blue',
+      targetClass
+    };
+    setNotices((prev) => {
+      const updated = [noticeObj, ...prev];
+      localStorage.setItem('ravs_notices', JSON.stringify(updated));
+      return updated;
+    });
+    broadcastEvent('NEW_NOTICE', { notice: noticeObj });
+    addToast(`Class circular published to ${targetClass}!`, 'success');
+  };
+
+  // Class chat send
+  const sendClassChatMessage = (classId, messageText) => {
+    if (!messageText.trim()) return;
+    const msg = {
+      id: 'cc_' + Date.now(),
+      sender: currentUser ? currentUser.name : 'Participant',
+      role: activeRole || 'STUDENT',
+      avatar: currentUser?.avatar || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      message: messageText.trim(),
+      badge: activeRole === 'TEACHER' ? 'Teacher' : 'Student'
+    };
+    setClassChats((prev) => {
+      const currentList = prev[classId] || [];
+      const updated = { ...prev, [classId]: [...currentList, msg] };
+      localStorage.setItem('ravs_class_chats', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
 
   // Compute attendance stats
   const presentCount = students8A.filter((s) => s.status === 'PRESENT').length;
@@ -438,6 +607,24 @@ export function SchoolProvider({ children }) {
         facultyChats,
         sendFacultyChat,
         classNotes,
+        // Multi-Class Management (Classes 5 to 12)
+        classesList: CLASSES_CONFIG,
+        selectedClassId,
+        setSelectedClassId,
+        multiClassRoster,
+        setClassStudentStatus,
+        markAllClassStudentsPresent,
+        // QR Attendance Session
+        activeQrSession,
+        setActiveQrSession,
+        regenerateQRSession,
+        qrScannedLogs,
+        markStudentAttendanceByQR,
+        // Class Hub & Communication
+        classChats,
+        sendClassChatMessage,
+        uploadClassNote,
+        publishClassNotice,
         // AI Study Assistant
         aiMessages,
         isAiThinking,

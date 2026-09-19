@@ -19,7 +19,9 @@ import AdminFleet from './components/admin/AdminFleet';
 
 // Teacher Suite
 import TeacherHome from './components/teacher/TeacherHome';
-import AttendanceRoster from './components/teacher/AttendanceRoster';
+import TeacherAttendanceQR from './components/teacher/TeacherAttendanceQR';
+import TeacherFacultyChat from './components/teacher/TeacherFacultyChat';
+import TeacherClassHub from './components/teacher/TeacherClassHub';
 
 // Student Suite
 import StudentHome from './components/student/StudentHome';
@@ -69,8 +71,9 @@ export default function App() {
         return <AdminHome onNavigate={(tab) => setCurrentTab(tab)} />;
 
       case 'TEACHER':
-        if (currentTab === 'attendance') return <AttendanceRoster onBack={() => setCurrentTab('home')} />;
-        if (currentTab === 'chat') return <AdminChat onBack={() => setCurrentTab('home')} />;
+        if (currentTab === 'attendance') return <TeacherAttendanceQR onBack={() => setCurrentTab('home')} />;
+        if (currentTab === 'chat') return <TeacherFacultyChat onBack={() => setCurrentTab('home')} />;
+        if (currentTab === 'hub') return <TeacherClassHub onBack={() => setCurrentTab('home')} />;
         if (currentTab === 'notices') return <StudentNotices onBack={() => setCurrentTab('home')} />;
         return <TeacherHome onNavigate={(tab) => setCurrentTab(tab)} />;
 

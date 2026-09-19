@@ -50,7 +50,7 @@ export default function TeacherHome({ onNavigate }) {
 
       {/* Primary Action Modules Grid */}
       <div className="grid grid-cols-2 gap-3">
-        {/* Attendance Action */}
+        {/* QR Attendance Action */}
         <button
           onClick={() => onNavigate('attendance')}
           className="p-4 rounded-3xl bg-white border border-slate-200/90 shadow-xs hover:shadow-md active:scale-98 transition-all text-left flex flex-col justify-between h-36 relative overflow-hidden group"
@@ -60,16 +60,16 @@ export default function TeacherHome({ onNavigate }) {
           </div>
           <div className="mt-auto">
             <span className="text-xs font-bold text-slate-900 block group-hover:text-blue-700 transition-colors">
-              Daily Roll-Call
+              QR & Roll-Call
             </span>
             <span className="text-[11px] text-emerald-700 font-bold flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" />
-              <span>{attendanceStats.present} Present</span>
+              <span>{attendanceStats.present} Present Today</span>
             </span>
           </div>
         </button>
 
-        {/* Staff Channel */}
+        {/* Faculty Chat Channel */}
         <button
           onClick={() => onNavigate('chat')}
           className="p-4 rounded-3xl bg-white border border-slate-200/90 shadow-xs hover:shadow-md active:scale-98 transition-all text-left flex flex-col justify-between h-36 relative overflow-hidden group"
@@ -82,7 +82,25 @@ export default function TeacherHome({ onNavigate }) {
               Faculty Common
             </span>
             <span className="text-[11px] text-slate-500 font-medium">
-              Admin & Staff board
+              Teacher-to-Teacher Chat
+            </span>
+          </div>
+        </button>
+
+        {/* Class Study Hub (Upload Notes & Notices) */}
+        <button
+          onClick={() => onNavigate('hub')}
+          className="p-4 rounded-3xl bg-white border border-slate-200/90 shadow-xs hover:shadow-md active:scale-98 transition-all text-left flex flex-col justify-between h-36 relative overflow-hidden group"
+        >
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-sm">
+            <BookOpen className="w-5 h-5" />
+          </div>
+          <div className="mt-auto">
+            <span className="text-xs font-bold text-slate-900 block group-hover:text-amber-700 transition-colors">
+              Class Study Hub
+            </span>
+            <span className="text-[11px] text-slate-500 font-medium">
+              Notes, Notices & Doubts
             </span>
           </div>
         </button>
@@ -100,29 +118,12 @@ export default function TeacherHome({ onNavigate }) {
               School Circulars
             </span>
             <span className="text-[11px] text-slate-500 font-medium">
-              {notices.length} Active notices
-            </span>
-          </div>
-        </button>
-
-        {/* Class Homework Notes */}
-        <button
-          onClick={() => onNavigate('attendance')}
-          className="p-4 rounded-3xl bg-white border border-slate-200/90 shadow-xs hover:shadow-md active:scale-98 transition-all text-left flex flex-col justify-between h-36 relative overflow-hidden group"
-        >
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-sm">
-            <BookOpen className="w-5 h-5" />
-          </div>
-          <div className="mt-auto">
-            <span className="text-xs font-bold text-slate-900 block group-hover:text-amber-700 transition-colors">
-              Study Handouts
-            </span>
-            <span className="text-[11px] text-slate-500 font-medium">
-              PDF lesson uploads
+              {notices.length} Active Notices
             </span>
           </div>
         </button>
       </div>
+
 
       {/* Daily Instruction Schedule */}
       <div className="bg-white rounded-3xl p-4 border border-slate-200/90 shadow-xs space-y-3">

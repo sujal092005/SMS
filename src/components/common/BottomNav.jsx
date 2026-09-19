@@ -29,10 +29,11 @@ export default function BottomNav({ currentTab, onTabChange }) {
       case 'TEACHER':
         return [
           { id: 'home', label: 'Home', icon: LayoutDashboard },
-          { id: 'attendance', label: 'Roll Call', icon: CheckSquare },
+          { id: 'attendance', label: 'QR Attendance', icon: CheckSquare },
+          { id: 'hub', label: 'Study Hub', icon: FileText },
           { id: 'chat', label: 'Faculty', icon: MessageSquare },
-          { id: 'notices', label: 'Notices', icon: Bell },
         ];
+
       case 'STUDENT':
         return [
           { id: 'home', label: 'Home', icon: LayoutDashboard },
