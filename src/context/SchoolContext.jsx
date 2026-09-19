@@ -42,6 +42,10 @@ export function SchoolProvider({ children }) {
   });
 
   const [currentUser, setCurrentUser] = useState(() => {
+    const saved = localStorage.getItem('ravs_current_user');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) {}
+    }
     const role = localStorage.getItem('ravs_active_role');
     return role ? INITIAL_USERS[role.toLowerCase()] || null : null;
   });
@@ -205,6 +209,14 @@ export function SchoolProvider({ children }) {
   }, [activeRole]);
 
   useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('ravs_current_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('ravs_current_user');
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
     localStorage.setItem('ravs_students_8a', JSON.stringify(students8A));
   }, [students8A]);
 
@@ -350,12 +362,28 @@ export function SchoolProvider({ children }) {
   };
 
   // Auth methods
-  const loginAsRole = (roleKey) => {
-    const user = INITIAL_USERS[roleKey.toLowerCase()];
-    if (user) {
-      setActiveRole(user.role);
-      setCurrentUser(user);
-      addToast(`Logged in as ${user.name} (${user.role})`, 'success');
+  const loginAsRole = (roleKey, customUserData = null) => {
+    const roleUpper = roleKey.toUpperCase();
+    let baseUser = INITIAL_USERS[roleKey.toLowerCase()];
+
+    if (customUserData && customUserData.userId) {
+      const cleanId = customUserData.userId.trim();
+      const displayName = customUserData.userName || cleanId;
+      baseUser = {
+        id: cleanId,
+        role: roleUpper,
+        name: displayName,
+        title: `${roleUpper.charAt(0) + roleUpper.slice(1).toLowerCase()} • ID: ${cleanId}`,
+        institution: 'RAVS Smart School',
+        avatar: baseUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+        email: `${cleanId.toLowerCase().replace(/[^a-z0-9]/g, '')}@ravsschool.edu`
+      };
+    }
+
+    if (baseUser) {
+      setActiveRole(roleUpper);
+      setCurrentUser(baseUser);
+      addToast(`Logged in as ${baseUser.name} (${roleUpper})`, 'success');
     }
   };
 

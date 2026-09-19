@@ -93,7 +93,7 @@ export default function SignInScreen() {
 
   const handleManualLogin = (e) => {
     e.preventDefault();
-    loginAsRole(selectedRole);
+    loginAsRole(selectedRole, { userId });
   };
 
   const currentRoleObj = roles.find((r) => r.id === selectedRole) || roles[0];
