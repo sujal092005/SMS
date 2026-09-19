@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isSchoolAdmin(schoolId) {
+      return isAuthenticated() && 
+        request.auth.token.schoolId == schoolId && 
+        request.auth.token.role == 'ADMIN';
+    }
+
+    function isTeacher(schoolId) {
+      return isAuthenticated() && 
+        request.auth.token.schoolId == schoolId && 
+        (request.auth.token.role == 'TEACHER' || request.auth.token.role == 'ADMIN');
+    }
+
+    // Default deny all unauthenticated access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Public / School Tenant isolated collections
+    match /schools/{schoolId} {
+      allow read: if isAuthenticated();
+      allow write: if isSchoolAdmin(schoolId);
+
+      // Student Isolated Roster
+      match /classes/{classId}/students/{studentId} {
+        allow read: if isAuthenticated() && request.auth.token.schoolId == schoolId;
+        allow write: if isTeacher(schoolId);
+      }
+
+      // Teacher Roster
+      match /teachers/{teacherId} {
+        allow read: if isAuthenticated() && request.auth.token.schoolId == schoolId;
+        allow write: if isSchoolAdmin(schoolId);
+      }
+
+      // Notices (Only Admin/Teacher can create)
+      match /notices/{noticeId} {
+        allow read: if isAuthenticated() && request.auth.token.schoolId == schoolId;
+        allow write: if isTeacher(schoolId);
+      }
+
+      // Live Bus GPS Telemetry
+      match /bus_locations/{busId} {
+        allow read: if isAuthenticated() && request.auth.token.schoolId == schoolId;
+        allow write: if isAuthenticated() && request.auth.token.role == 'DRIVER';
+      }
+    }
+  }
+}

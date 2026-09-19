@@ -102,7 +102,11 @@ export function SchoolProvider({ children }) {
   const [busCoords, setBusCoords] = useState({});
 
   const updateBusCoords = (busId, coords, driverInfo = {}) => {
-    setBusCoords((prev) => ({ ...prev, [busId]: { ...coords, ...driverInfo } }));
+    setIsTripActive(true);
+    setBusCoords((prev) => ({
+      ...prev,
+      [busId]: { ...coords, ...driverInfo, updatedAt: new Date().toLocaleTimeString() }
+    }));
     if (driverInfo.speed !== undefined) {
       setCurrentSpeed(driverInfo.speed);
     }
