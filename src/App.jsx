@@ -16,6 +16,7 @@ import AdminAttendance from './components/admin/AdminAttendance';
 import AdminNotices from './components/admin/AdminNotices';
 import AdminChat from './components/admin/AdminChat';
 import AdminFleet from './components/admin/AdminFleet';
+import AdminUserManagement from './components/admin/AdminUserManagement';
 
 // Teacher Suite
 import TeacherHome from './components/teacher/TeacherHome';
@@ -68,6 +69,7 @@ export default function App() {
         if (currentTab === 'notices') return <AdminNotices onBack={() => setCurrentTab('home')} />;
         if (currentTab === 'chat') return <AdminChat onBack={() => setCurrentTab('home')} />;
         if (currentTab === 'fleet') return <AdminFleet onBack={() => setCurrentTab('home')} />;
+        if (currentTab === 'users') return <AdminUserManagement onBack={() => setCurrentTab('home')} />;
         return <AdminHome onNavigate={(tab) => setCurrentTab(tab)} />;
 
       case 'TEACHER':

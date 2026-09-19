@@ -17,7 +17,8 @@ import {
   where,
   orderBy,
   serverTimestamp,
-  enableIndexedDbPersistence
+  enableIndexedDbPersistence,
+  writeBatch
 } from 'firebase/firestore';
 import {
   getAuth,
@@ -209,3 +210,55 @@ export const listenToClassChat = (classId, callback) => {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
   });
 };
+
+// ─── 8. BULK ROSTER IMPORT & ISOLATED CLASS DATABASE ─────────────────────────
+export const bulkImportStudentsToCloud = async (classId, studentList) => {
+  if (!isFirebaseConnected) return { success: false, count: studentList.length, mode: 'local' };
+  try {
+    const batch = writeBatch(db);
+    studentList.forEach((st) => {
+      const docId = st.id || st.roll || `st_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const ref = doc(db, `classes/${classId}/students`, docId);
+      batch.set(ref, {
+        ...st,
+        classId,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    });
+    await batch.commit();
+    return { success: true, count: studentList.length };
+  } catch (e) {
+    console.error('Bulk student import error:', e);
+    return { success: false, error: e.message };
+  }
+};
+
+export const bulkImportTeachersToCloud = async (teacherList) => {
+  if (!isFirebaseConnected) return { success: false, count: teacherList.length, mode: 'local' };
+  try {
+    const batch = writeBatch(db);
+    teacherList.forEach((t) => {
+      const docId = t.id || t.employeeId || `tch_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const ref = doc(db, 'teachers', docId);
+      batch.set(ref, {
+        ...t,
+        role: 'TEACHER',
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    });
+    await batch.commit();
+    return { success: true, count: teacherList.length };
+  } catch (e) {
+    console.error('Bulk teacher import error:', e);
+    return { success: false, error: e.message };
+  }
+};
+
+export const listenToClassRoster = (classId, callback) => {
+  if (!isFirebaseConnected) return () => {};
+  return onSnapshot(col(`classes/${classId}/students`), (snap) => {
+    const students = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    callback(students);
+  });
+};
+

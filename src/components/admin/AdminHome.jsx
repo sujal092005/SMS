@@ -196,6 +196,30 @@ export default function AdminHome({ onNavigate }) {
           </button>
         </div>
 
+        {/* 5. User & Bulk CSV Database Management Card */}
+        <button
+          onClick={() => onNavigate('users')}
+          className="w-full p-4 rounded-3xl bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white shadow-md hover:shadow-xl active:scale-[0.98] transition-all text-left flex items-center justify-between group"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-blue-300 border border-white/10 group-hover:scale-105 transition-transform">
+              <Database className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-[15px] text-white">Roster & Database Import</span>
+                <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[9.5px] font-bold border border-blue-400/30">500+ Students</span>
+              </div>
+              <p className="text-[11px] text-blue-200/80 mt-0.5">
+                Isolated Class Databases • CSV/Excel Bulk Batch Importer
+              </p>
+            </div>
+          </div>
+          <div className="w-8 h-8 rounded-full bg-white/10 group-hover:bg-white group-hover:text-blue-900 flex items-center justify-center text-white transition-all">
+            <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        </button>
+
         {/* Live Operational Status Strip */}
         <div className="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-xs space-y-2">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2">
