@@ -1,5 +1,5 @@
 // Google Gemini AI API Service for RAVS Smart School
-// Provides intelligent CBSE & K-12 AI tutoring with step-by-step explanations
+// Connected to Gemini 3.6 Flash for instant academic responses
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
 
@@ -15,74 +15,86 @@ export async function askGeminiTutor(question, customApiKey = "") {
     : GEMINI_API_KEY;
 
   if (!apiKey) {
-    console.info("ℹ️ Gemini API key not found in env. Running in intelligent built-in academic engine mode.");
-    return null; // Signals context to use intelligent knowledge base
+    console.info("ℹ️ Gemini API key not found in env.");
+    return null;
   }
 
-  const systemInstruction = `You are the RAVS Smart School AI Study Assistant for CBSE secondary students (Grade 5 to 12).
-Provide high quality, structured, clear explanations formatted as JSON with the following structure:
-{
-  "title": "Short title describing the topic",
-  "steps": [
-    "**1. Concept Overview**: Explain fundamental concept clearly.",
-    "**2. Step-by-Step / Formula**: Provide exact formulas, reactions, or steps.",
-    "**3. Key Examples / Solution**: Concrete calculation or example.",
-    "**4. Summary**: Core takeaway."
-  ],
-  "examTip": "A high-yield pro exam tip for scoring full marks in board/school exams."
-}`;
+  const prompt = `You are the expert RAVS Smart School AI Study Assistant for CBSE secondary & higher secondary students (Grades 5th to 12th).
+Student Question: "${question}"
+
+Provide a structured, helpful explanation for a school student.
+Format your answer clearly with:
+1. Short overview of the concept
+2. Step-by-step explanation or formula derivation
+3. Example or application
+4. A pro Board Exam Tip for scoring high marks.`;
 
   const requestBody = {
     contents: [
       {
         parts: [
           {
-            text: `${systemInstruction}\n\nStudent Question: "${question}"\n\nReturn strictly valid JSON only.`
+            text: prompt
           }
         ]
       }
     ],
     generationConfig: {
-      temperature: 0.3,
-      maxOutputTokens: 1000
+      temperature: 0.4,
+      maxOutputTokens: 1200
     }
   };
 
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(requestBody)
+  const modelsToTry = [
+    'gemini-3.6-flash',
+    'gemini-2.5-flash',
+    'gemini-flash-latest',
+    'gemini-3.7-flash'
+  ];
+
+  for (const model of modelsToTry) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(requestBody)
+        }
+      );
+
+      if (!response.ok) {
+        continue;
       }
-    );
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      console.warn("Gemini API returned error status:", response.status, errData);
-      return null;
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!rawText) continue;
+
+      // Split into paragraphs or steps for rich card UI
+      const lines = rawText.split('\n\n').filter(p => p.trim().length > 0);
+
+      let examTip = "";
+      const tipIndex = lines.findIndex(l => l.toLowerCase().includes('exam tip') || l.toLowerCase().includes('board exam'));
+      if (tipIndex !== -1) {
+        examTip = lines[tipIndex].replace(/[*#]/g, '').trim();
+        lines.splice(tipIndex, 1);
+      }
+
+      return {
+        title: `CBSE Study Guide: ${question.slice(0, 45)}${question.length > 45 ? '...' : ''}`,
+        steps: lines.length > 1 ? lines : [rawText],
+        examTip: examTip || "High yield topic: Focus on exact keywords and labelled diagrams in board exams.",
+        text: rawText,
+        modelUsed: model
+      };
+    } catch (err) {
+      console.warn(`Failed model ${model}:`, err.message);
     }
-
-    const data = await response.json();
-    const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!candidateText) return null;
-
-    // Parse JSON safely
-    const cleanJson = candidateText.replace(/```json/g, "").replace(/```/g, "").trim();
-    const parsed = JSON.parse(cleanJson);
-
-    return {
-      title: parsed.title || `Guide: ${question}`,
-      steps: Array.isArray(parsed.steps) ? parsed.steps : [parsed.steps || candidateText],
-      examTip: parsed.examTip || "Practice writing structured point-wise answers for full marks in exams.",
-      text: `Here is your structured AI breakdown for: **${question}**`
-    };
-  } catch (err) {
-    console.warn("Gemini API request failed or invalid JSON returned, falling back to local engine:", err.message);
-    return null;
   }
+
+  return null;
 }
