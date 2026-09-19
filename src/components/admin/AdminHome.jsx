@@ -1,5 +1,6 @@
 import React from 'react';
 import { useSchool } from '../../context/SchoolContext';
+import { useTranslation } from 'react-i18next';
 import { 
   CheckSquare, 
   Bell, 
@@ -7,6 +8,7 @@ import {
   Bus, 
   ArrowRight, 
   Cloud, 
+  Database,
   TrendingUp, 
   ShieldCheck, 
   Users, 
@@ -21,10 +23,13 @@ export default function AdminHome({ onNavigate }) {
     notices, 
     buses, 
     facultyChats, 
-    isTripActive 
+    isTripActive,
+    busCoords,
+    isFirebaseConnected
   } = useSchool();
+  const { t } = useTranslation();
 
-  const activeBusesCount = buses.filter(b => b.status === 'ON_ROUTE').length;
+  const activeBusesCount = Object.keys(busCoords).length || buses.filter(b => b.status === 'ON_ROUTE').length;
 
   return (
     <div className="flex-1 flex flex-col justify-between p-5 bg-[#FAF8FF] pb-24">
@@ -37,27 +42,31 @@ export default function AdminHome({ onNavigate }) {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
               </span>
-              <span className="text-[10.5px] font-bold tracking-wider uppercase">Term 1 • 2024–25</span>
+              <span className="text-[10.5px] font-bold tracking-wider uppercase">{t('app.tagline')}</span>
             </div>
 
-            <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200 text-[11px] font-medium">
-              <Cloud className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Live Cloud Sync</span>
+            <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] font-medium ${
+              isFirebaseConnected 
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                : 'bg-slate-100 text-slate-600 border-slate-200'
+            }`}>
+              {isFirebaseConnected ? <Cloud className="w-3.5 h-3.5 text-emerald-600" /> : <Database className="w-3.5 h-3.5 text-amber-600" />}
+              <span>{isFirebaseConnected ? t('app.cloudConnected') : t('app.localMode')}</span>
             </div>
           </div>
 
           <div className="space-y-0.5">
             <h1 className="text-[24px] font-extrabold text-slate-900 tracking-tight leading-tight flex items-center gap-2">
-              <span>Good Morning, Admin</span>
+              <span>{t('admin.workspaceTitle')}</span>
               <span className="inline-block animate-bounce text-[22px]">👋</span>
             </h1>
             <p className="text-xs font-medium text-slate-500">
-              Welcome back to RAVS institutional hub. What would you like to manage?
+              {t('admin.schoolOverview')}
             </p>
           </div>
         </div>
 
-        {/* 2x2 Primary Module Grid matching Stitch Screen SCREEN_43 */}
+        {/* 2x2 Primary Module Grid */}
         <div className="grid grid-cols-2 gap-3.5">
           {/* 1. Attendance Card */}
           <button
@@ -82,10 +91,10 @@ export default function AdminHome({ onNavigate }) {
 
             <div className="flex flex-col gap-0.5 relative z-10 mt-auto">
               <span className="font-bold text-[15px] text-slate-900 group-hover:text-blue-700 transition-colors">
-                Attendance
+                {t('nav.attendance')}
               </span>
               <span className="text-[11px] text-slate-500 line-clamp-2 leading-snug">
-                {attendanceStats.present} present of {attendanceStats.total} students today
+                {attendanceStats.present} {t('teacher.present')} / {attendanceStats.total} {t('common.all')}
               </span>
             </div>
           </button>
@@ -103,7 +112,7 @@ export default function AdminHome({ onNavigate }) {
                   <Bell className="w-6 h-6" />
                 </div>
                 <div className="absolute -bottom-1 -right-1 px-1.5 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[9.5px] font-bold text-emerald-700">
-                  {notices.length} New
+                  {notices.length}
                 </div>
               </div>
               <div className="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-emerald-600 group-hover:text-white flex items-center justify-center text-slate-500 transition-colors">
@@ -113,10 +122,10 @@ export default function AdminHome({ onNavigate }) {
 
             <div className="flex flex-col gap-0.5 relative z-10 mt-auto">
               <span className="font-bold text-[15px] text-slate-900 group-hover:text-emerald-700 transition-colors">
-                Notices
+                {t('nav.notices')}
               </span>
               <span className="text-[11px] text-slate-500 line-clamp-2 leading-snug">
-                Broadcast official circulars & campus news
+                {t('admin.broadcastNotice')}
               </span>
             </div>
           </button>
@@ -134,7 +143,7 @@ export default function AdminHome({ onNavigate }) {
                   <MessageSquare className="w-6 h-6" />
                 </div>
                 <div className="absolute -bottom-1 -right-1 px-1.5 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-[9.5px] font-bold text-purple-700">
-                  Active
+                  {t('common.active')}
                 </div>
               </div>
               <div className="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-purple-600 group-hover:text-white flex items-center justify-center text-slate-500 transition-colors">
@@ -144,10 +153,10 @@ export default function AdminHome({ onNavigate }) {
 
             <div className="flex flex-col gap-0.5 relative z-10 mt-auto">
               <span className="font-bold text-[15px] text-slate-900 group-hover:text-purple-700 transition-colors">
-                Teacher Chat
+                {t('teacher.facultyChat')}
               </span>
               <span className="text-[11px] text-slate-500 line-clamp-2 leading-snug">
-                Direct Admin ↔ Faculty messaging channel
+                {t('teacher.chatSubtitle')}
               </span>
             </div>
           </button>
@@ -164,9 +173,11 @@ export default function AdminHome({ onNavigate }) {
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-white shadow-md shadow-amber-500/25 group-hover:scale-105 transition-transform">
                   <Bus className="w-6 h-6" />
                 </div>
-                <div className="absolute -bottom-1 -right-1 px-1.5 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-[9.5px] font-bold text-amber-800 flex items-center gap-1">
-                  <span className={`w-1.5 h-1.5 rounded-full ${isTripActive ? 'bg-emerald-500 animate-ping' : 'bg-amber-500'}`}></span>
-                  <span>{activeBusesCount + (isTripActive ? 1 : 0)} Live</span>
+                <div className={`absolute -bottom-1 -right-1 px-1.5 py-0.5 rounded-md border text-[9.5px] font-bold flex items-center gap-1 ${
+                  activeBusesCount > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-100 border-slate-200 text-slate-600'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${activeBusesCount > 0 ? 'bg-emerald-500 animate-ping' : 'bg-slate-400'}`}></span>
+                  <span>{activeBusesCount > 0 ? `${activeBusesCount} Live` : t('common.standby')}</span>
                 </div>
               </div>
               <div className="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-amber-500 group-hover:text-white flex items-center justify-center text-slate-500 transition-colors">
@@ -176,10 +187,10 @@ export default function AdminHome({ onNavigate }) {
 
             <div className="flex flex-col gap-0.5 relative z-10 mt-auto">
               <span className="font-bold text-[15px] text-slate-900 group-hover:text-amber-700 transition-colors">
-                Bus Tracking
+                {t('teacher.busTracking')}
               </span>
               <span className="text-[11px] text-slate-500 line-clamp-2 leading-snug">
-                Fleet GPS coordinates & route telemetrics
+                {t('admin.fleetMonitor')}
               </span>
             </div>
           </button>
@@ -188,42 +199,42 @@ export default function AdminHome({ onNavigate }) {
         {/* Live Operational Status Strip */}
         <div className="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-xs space-y-2">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Campus Operational Pulse</span>
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">{t('admin.schoolOverview')}</span>
             <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-              All Systems Operational
+              {t('common.active')}
             </span>
           </div>
 
           <div className="grid grid-cols-3 gap-2 text-center pt-0.5">
             <div className="p-2 rounded-xl bg-slate-50">
-              <span className="text-[10px] font-semibold text-slate-500 block">Class 8-A Headcount</span>
+              <span className="text-[10px] font-semibold text-slate-500 block">Class 8-A</span>
               <span className="text-sm font-extrabold text-blue-700">{attendanceStats.present} / {attendanceStats.total}</span>
             </div>
             <div className="p-2 rounded-xl bg-slate-50">
-              <span className="text-[10px] font-semibold text-slate-500 block">Staff on Leave</span>
-              <span className="text-sm font-extrabold text-amber-700">3 Faculty</span>
+              <span className="text-[10px] font-semibold text-slate-500 block">{t('teacher.absent')}</span>
+              <span className="text-sm font-extrabold text-amber-700">{attendanceStats.absent}</span>
             </div>
             <div className="p-2 rounded-xl bg-slate-50">
-              <span className="text-[10px] font-semibold text-slate-500 block">Connected Buses</span>
-              <span className="text-sm font-extrabold text-emerald-700">{buses.length} Vehicles</span>
+              <span className="text-[10px] font-semibold text-slate-500 block">{t('nav.fleet')}</span>
+              <span className="text-sm font-extrabold text-emerald-700">{buses.length}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Grounding Footer matching Stitch Screen */}
+      {/* Grounding Footer */}
       <div className="pt-6 flex flex-col items-center gap-1.5 text-center">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/90 border border-slate-200/80 shadow-xs backdrop-blur-md">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
-          <span className="text-[11px] font-semibold text-slate-700">RAVS Smart School Cloud</span>
+          <span className="text-[11px] font-semibold text-slate-700">{t('app.title')}</span>
           <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-          <span className="text-[10.5px] font-medium text-slate-500">Encrypted & Synchronized</span>
+          <span className="text-[10.5px] font-medium text-slate-500">{isFirebaseConnected ? t('app.cloudConnected') : t('app.localMode')}</span>
         </div>
         <span className="text-[9.5px] font-bold uppercase tracking-widest text-slate-400">
-          v2.4.0 • Enterprise Edition
+          v2.4.0 • {t('app.tagline')}
         </span>
       </div>
     </div>

@@ -16,7 +16,20 @@ import {
 import { 
   syncAttendanceToCloud, 
   syncNotesToCloud, 
-  sendFacultyChatMessage 
+  sendFacultyChatMessage,
+  addNoticeToCloud,
+  listenToNotices,
+  listenToClassNotes,
+  listenToFacultyChat,
+  listenToClassChat,
+  listenToBusLocations,
+  listenToTeacherAttendance,
+  submitStudentAttendanceToCloud,
+  sendClassChatToCloud,
+  updateBusLocationInCloud,
+  deleteNoticeFromCloud,
+  getBackendStatus,
+  isFirebaseConnected
 } from '../services/firebase';
 import { askGeminiTutor } from '../services/gemini';
 
@@ -79,14 +92,38 @@ export function SchoolProvider({ children }) {
     return saved ? JSON.parse(saved) : INITIAL_BUSES;
   });
 
-  const [isTripActive, setIsTripActive] = useState(() => {
-    return localStorage.getItem('ravs_is_trip_active') === 'true';
-  });
+  const [isTripActive, setIsTripActive] = useState(false);
 
-  const [driverGPSStatus, setDriverGPSStatus] = useState('STANDBY'); // 'STANDBY' | 'ACQUIRING' | 'LIVE_HARDWARE' | 'SIMULATED'
-  const [busRouteProgress, setBusRouteProgress] = useState(35);
+  const [driverGPSStatus, setDriverGPSStatus] = useState('STANDBY');
+  const [busRouteProgress, setBusRouteProgress] = useState(0);
   const [currentSpeed, setCurrentSpeed] = useState(0);
-  const [currentEta, setCurrentEta] = useState(15);
+  const [currentEta, setCurrentEta] = useState(0);
+  // Per-bus live GPS coordinates: { 'BUS-01': { lat, lng }, 'BUS-02': { lat, lng } }
+  const [busCoords, setBusCoords] = useState({});
+
+  const updateBusCoords = (busId, coords, driverInfo = {}) => {
+    setBusCoords((prev) => ({ ...prev, [busId]: { ...coords, ...driverInfo } }));
+    if (driverInfo.speed !== undefined) {
+      setCurrentSpeed(driverInfo.speed);
+    }
+    setBuses((prev) =>
+      prev.map((b) =>
+        b.id === busId
+          ? {
+              ...b,
+              status: 'ON_ROUTE',
+              speed: driverInfo.speed || b.speed || 0,
+              lastCoordinate: coords,
+              ...(driverInfo.driverName ? { driverName: driverInfo.driverName } : {}),
+              ...(driverInfo.driverPhone ? { driverPhone: driverInfo.driverPhone } : {}),
+              ...(driverInfo.totalStudents ? { capacity: `${driverInfo.totalStudents} Students` } : {})
+            }
+          : b
+      )
+    );
+    broadcastEvent('BUS_LOCATION_UPDATE', { busId, coords, driverInfo });
+    updateBusLocationInCloud(busId, coords, driverInfo);
+  };
 
   // Faculty Chat
   const [facultyChats, setFacultyChats] = useState(() => {
@@ -131,7 +168,7 @@ export function SchoolProvider({ children }) {
     {
       id: 'ai_welcome',
       sender: 'assistant',
-      text: 'Hello! I am your RAVS AI Study Assistant powered by Google Gemini. Ask me any CBSE syllabus question, math derivation, or science concept!',
+      text: 'Hello! I am your RAVS AI Study Assistant powered by Google Gemini. Ask me any Semi-English syllabus question, math derivation, or science concept!',
       timestamp: 'Just now'
     }
   ]);
@@ -204,13 +241,32 @@ export function SchoolProvider({ children }) {
         const { type, payload } = event.data;
         if (type === 'TRIP_STATUS_CHANGE') {
           setIsTripActive(payload.isTripActive);
-          setCurrentSpeed(payload.speed);
-          setBusRouteProgress(payload.progress);
-          setCurrentEta(payload.eta);
+          setCurrentSpeed(payload.speed || 0);
+          setBusRouteProgress(payload.progress || 0);
+          setCurrentEta(payload.eta || 0);
           setBuses((prev) =>
             prev.map((b) =>
-              b.id === 'BUS-01'
-                ? { ...b, status: payload.isTripActive ? 'ON_ROUTE' : 'STANDBY', speed: payload.speed, etaMinutes: payload.eta }
+              b.id === (payload.busId || 'BUS-01')
+                ? { ...b, status: payload.isTripActive ? 'ON_ROUTE' : 'STANDBY', speed: payload.speed || 0, etaMinutes: payload.eta || 0 }
+                : b
+            )
+          );
+        } else if (type === 'BUS_LOCATION_UPDATE') {
+          setIsTripActive(true);
+          setBusCoords((prev) => ({ ...prev, [payload.busId]: { ...payload.coords, ...payload.driverInfo } }));
+          if (payload.driverInfo?.speed !== undefined) setCurrentSpeed(payload.driverInfo.speed);
+          setBuses((prev) =>
+            prev.map((b) =>
+              b.id === payload.busId
+                ? {
+                    ...b,
+                    status: 'ON_ROUTE',
+                    speed: payload.driverInfo?.speed || b.speed || 0,
+                    lastCoordinate: payload.coords,
+                    ...(payload.driverInfo?.driverName ? { driverName: payload.driverInfo.driverName } : {}),
+                    ...(payload.driverInfo?.driverPhone ? { driverPhone: payload.driverInfo.driverPhone } : {}),
+                    ...(payload.driverInfo?.totalStudents ? { capacity: `${payload.driverInfo.totalStudents} Students` } : {})
+                  }
                 : b
             )
           );
@@ -237,6 +293,46 @@ export function SchoolProvider({ children }) {
         channelRef.current.close();
       }
     };
+  }, []);
+
+  // ─── Firebase real-time listeners (run when Firebase is connected) ─────────
+  useEffect(() => {
+    if (!isFirebaseConnected) return;
+    const unsubs = [];
+
+    // Notices
+    unsubs.push(listenToNotices((cloudNotices) => {
+      if (cloudNotices.length > 0) setNotices(cloudNotices);
+    }));
+
+    // Faculty chat (general channel)
+    unsubs.push(listenToFacultyChat('general', (msgs) => {
+      if (msgs.length > 0) setFacultyChats(msgs);
+    }));
+
+    // Class notes for 8A
+    unsubs.push(listenToClassNotes('8A', (notes) => {
+      if (notes.length > 0) setClassNotes(notes);
+    }));
+
+    // Class chat for 8A
+    unsubs.push(listenToClassChat('8A', (msgs) => {
+      if (msgs.length > 0) {
+        setClassChats((prev) => ({ ...prev, '8A': msgs }));
+      }
+    }));
+
+    // Bus GPS locations
+    unsubs.push(listenToBusLocations((coordsMap) => {
+      setBusCoords(coordsMap);
+    }));
+
+    // Teacher attendance logs
+    unsubs.push(listenToTeacherAttendance((logs) => {
+      if (logs.length > 0) setTeacherPunchLogs(logs);
+    }));
+
+    return () => unsubs.forEach((u) => u && u());
   }, []);
 
   const broadcastEvent = (type, payload) => {
@@ -374,6 +470,7 @@ export function SchoolProvider({ children }) {
     });
 
     broadcastEvent('NEW_CLASS_CHAT', { classId, message: msg });
+    sendClassChatToCloud(classId, msg);
   };
 
   // Multi-Class Student Attendance roll call
@@ -395,7 +492,44 @@ export function SchoolProvider({ children }) {
     setAttendanceSubmittedTime(nowStr);
     localStorage.setItem('ravs_attendance_sync_time', nowStr);
     broadcastEvent('ATTENDANCE_UPDATED', { students: students8A, time: nowStr });
+    submitStudentAttendanceToCloud('8A', students8A, currentUser?.employeeId || 'EMP-T482');
     addToast('Class 8-A attendance submitted & synchronized with cloud!', 'success');
+  };
+
+  // Campus Notices (Broadcast & Manage)
+  const addNotice = (noticeData) => {
+    const newNotice = {
+      id: 'nt_' + Date.now(),
+      title: noticeData.title,
+      category: noticeData.category || 'General',
+      targetAudience: noticeData.targetAudience || 'All Campus',
+      content: noticeData.content,
+      postedBy: currentUser?.name || 'School Administration',
+      date: 'Today',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      pinned: !!noticeData.pinned
+    };
+
+    setNotices((prev) => {
+      const updated = [newNotice, ...prev];
+      localStorage.setItem('ravs_notices', JSON.stringify(updated));
+      return updated;
+    });
+
+    broadcastEvent('NEW_NOTICE', { notice: newNotice });
+    addNoticeToCloud(newNotice);
+    addToast('Notice published & broadcast to campus network!', 'success');
+    return newNotice;
+  };
+
+  const deleteNotice = (noticeId) => {
+    setNotices((prev) => {
+      const updated = prev.filter((n) => n.id !== noticeId);
+      localStorage.setItem('ravs_notices', JSON.stringify(updated));
+      return updated;
+    });
+    deleteNoticeFromCloud(noticeId);
+    addToast('Notice removed', 'info');
   };
 
   const setClassStudentStatus = (classId, studentId, status) => {
@@ -439,54 +573,72 @@ export function SchoolProvider({ children }) {
     sendFacultyChatMessage(channelId, msg);
   };
 
-  // Driver GPS & Fleet
+  // Driver GPS & Real Fleet Tracking (Zero Demo/Simulated intervals)
   const gpsWatchIdRef = useRef(null);
-  const simulationIntervalRef = useRef(null);
 
-  const startTrip = () => {
+  const startTrip = (tripDetails = {}) => {
+    const { busId = 'BUS-01', driverName, driverPhone, totalStudents } = tripDetails;
     setIsTripActive(true);
-    setCurrentSpeed(32);
-    setDriverGPSStatus('ACQUIRING');
+    setDriverGPSStatus('STREAMING');
 
     setBuses((prev) =>
-      prev.map((b) =>
-        b.id === 'BUS-01' ? { ...b, status: 'ON_ROUTE', speed: 32, etaMinutes: 14 } : b
-      )
+      prev.map((b) => {
+        if (b.id === busId) {
+          return {
+            ...b,
+            status: 'ON_ROUTE',
+            ...(driverName ? { driverName } : {}),
+            ...(driverPhone ? { driverPhone } : {}),
+            ...(totalStudents ? { capacity: `${totalStudents} Students` } : {}),
+          };
+        }
+        return b;
+      })
     );
 
-    if (simulationIntervalRef.current) clearInterval(simulationIntervalRef.current);
-    simulationIntervalRef.current = setInterval(() => {
-      setBusRouteProgress((prev) => {
-        const next = prev >= 95 ? 20 : prev + 3;
-        const newEta = Math.max(2, Math.round(18 * (1 - next / 100)));
-        setCurrentEta(newEta);
-        broadcastEvent('TRIP_STATUS_CHANGE', {
-          isTripActive: true,
-          speed: 34,
-          progress: next,
-          eta: newEta
-        });
-        return next;
-      });
-    }, 2800);
+    broadcastEvent('TRIP_STATUS_CHANGE', {
+      busId,
+      isTripActive: true,
+      speed: 0,
+      progress: 0,
+      eta: 0
+    });
 
-    addToast('Trip Started! Hardware GPS Telemetry streaming live', 'success');
+    addToast('Trip Started! GPS Telemetry streaming live', 'success');
   };
 
-  const stopTrip = () => {
+  const stopTrip = (busId = null) => {
     setIsTripActive(false);
     setCurrentSpeed(0);
+    setCurrentEta(0);
+    setBusRouteProgress(0);
     setDriverGPSStatus('STANDBY');
-    if (simulationIntervalRef.current) {
-      clearInterval(simulationIntervalRef.current);
-      simulationIntervalRef.current = null;
-    }
+
     setBuses((prev) =>
       prev.map((b) =>
-        b.id === 'BUS-01' ? { ...b, status: 'STANDBY', speed: 0, etaMinutes: 0 } : b
+        (!busId || b.id === busId) ? { ...b, status: 'STANDBY', speed: 0, etaMinutes: 0 } : b
       )
     );
-    addToast('Trip Completed! Bus telemetry returned to standby', 'info');
+
+    if (busId) {
+      setBusCoords((prev) => {
+        const copy = { ...prev };
+        delete copy[busId];
+        return copy;
+      });
+    } else {
+      setBusCoords({});
+    }
+
+    broadcastEvent('TRIP_STATUS_CHANGE', {
+      busId,
+      isTripActive: false,
+      speed: 0,
+      progress: 0,
+      eta: 0
+    });
+
+    addToast('Trip Completed! Bus returned to standby', 'info');
   };
 
   // AI Assistant with live Google Gemini API
@@ -585,6 +737,11 @@ export function SchoolProvider({ children }) {
         },
         // Notices
         notices,
+        addNotice,
+        deleteNotice,
+        // Backend / Firebase Connectivity
+        isFirebaseConnected,
+        getBackendStatus,
         // Buses & Telemetry
         buses,
         isTripActive,
@@ -592,6 +749,8 @@ export function SchoolProvider({ children }) {
         busRouteProgress,
         currentSpeed,
         currentEta,
+        busCoords,
+        updateBusCoords,
         startTrip,
         stopTrip,
         // Faculty Chat

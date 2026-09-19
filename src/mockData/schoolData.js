@@ -206,41 +206,40 @@ export const INITIAL_NOTICES = [
 export const INITIAL_BUSES = [
   {
     id: 'BUS-01',
-    busNumber: 'BUS-01',
-    plateNumber: 'DL-01-AB-4029',
-    driverName: 'Rajesh Kumar',
-    driverPhone: '+91 98765 43210',
-    route: 'Route #4 (South Corridor)',
+    busNumber: 'Bus 1',
+    plateNumber: 'MH-04-AB-1234',
+    driverName: 'Unassigned',
+    driverPhone: '—',
+    route: 'Bus 1 (North Route)',
     status: 'STANDBY',
     speed: 0,
-    etaMinutes: 15,
-    lastCoordinate: { lat: 28.61842, lng: 77.21568 },
-    capacity: '32 / 36 Enrolled',
+    etaMinutes: 0,
+    lastCoordinate: null,
+    capacity: 'Standby',
     stops: [
       { name: 'Central Campus Gate', time: '07:15 AM', status: 'SCHEDULED' },
       { name: 'Sector 14 Metro Station', time: '07:35 AM', status: 'SCHEDULED' },
       { name: 'Green Park Avenue', time: '07:55 AM', status: 'SCHEDULED' },
       { name: 'Maple Heights (Aarav Stop)', time: '08:15 AM', status: 'SCHEDULED', isChildStop: true },
-      { name: 'Lotus Valley Junction', time: '08:30 AM', status: 'SCHEDULED' },
       { name: 'RAVS Senior School', time: '08:45 AM', status: 'SCHEDULED' }
     ]
   },
   {
     id: 'BUS-02',
-    busNumber: 'BUS-02',
-    plateNumber: 'DL-01-CD-8192',
-    driverName: 'Vikram Singh',
-    driverPhone: '+91 98765 11223',
-    route: 'Route #2 (North Campus Link)',
-    status: 'ON_ROUTE',
-    speed: 28,
-    etaMinutes: 22,
-    lastCoordinate: { lat: 28.6341, lng: 77.2285 },
-    capacity: '28 / 32 Enrolled',
+    busNumber: 'Bus 2',
+    plateNumber: 'MH-04-CD-5678',
+    driverName: 'Unassigned',
+    driverPhone: '—',
+    route: 'Bus 2 (South Route)',
+    status: 'STANDBY',
+    speed: 0,
+    etaMinutes: 0,
+    lastCoordinate: null,
+    capacity: 'Standby',
     stops: [
-      { name: 'Model Town Crossing', time: '07:20 AM', status: 'PASSED' },
-      { name: 'Civil Lines Roundabout', time: '07:45 AM', status: 'PASSED' },
-      { name: 'Kalyan Vihar', time: '08:10 AM', status: 'PASSED' },
+      { name: 'Model Town Crossing', time: '07:20 AM', status: 'SCHEDULED' },
+      { name: 'Civil Lines Roundabout', time: '07:45 AM', status: 'SCHEDULED' },
+      { name: 'Kalyan Vihar', time: '08:10 AM', status: 'SCHEDULED' },
       { name: 'RAVS Senior School', time: '08:35 AM', status: 'SCHEDULED' }
     ]
   }
@@ -310,7 +309,7 @@ export const INITIAL_CLASS_NOTES = [
 
 export const PRESET_AI_KNOWLEDGE = {
   'Explain photosynthesis in simple steps': {
-    title: 'Photosynthesis Explained (CBSE Grade 8-10)',
+    title: 'Photosynthesis Explained (Grade 8-10 Semi-English)',
     steps: [
       '**1. Light Absorption**: Chlorophyll inside green plant chloroplasts absorbs sunlight (photons).',
       '**2. Water Splitting**: Roots absorb water (H₂O) from soil, which is split into hydrogen and oxygen (released into air).',

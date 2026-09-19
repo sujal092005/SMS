@@ -1,5 +1,6 @@
 import React from 'react';
 import { useSchool } from '../../context/SchoolContext';
+import { useTranslation } from 'react-i18next';
 import { 
   Sparkles, 
   CheckCircle2, 
@@ -20,10 +21,11 @@ export default function StudentHome({ onNavigate }) {
     currentUser, 
     notices, 
     isTripActive, 
-    currentEta, 
+    currentSpeed,
     students8A,
     classNotes
   } = useSchool();
+  const { t } = useTranslation();
 
   const studentClassId = currentUser?.classId || '8A';
   const studentClassName = currentUser?.assignedClass || 'Class 8-A';
@@ -51,17 +53,17 @@ export default function StudentHome({ onNavigate }) {
 
           <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 flex items-center gap-1">
             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-            <span>Present Today</span>
+            <span>{t('teacher.present')} {t('common.today')}</span>
           </span>
         </div>
 
         <div className="space-y-0.5">
           <h1 className="text-2xl font-extrabold text-[#00236F] tracking-tight flex items-center gap-2">
-            <span>Hi, {currentUser?.name || 'Aarav'}</span>
+            <span>{currentUser?.name || 'Aarav'}</span>
             <span className="text-xl">🎒</span>
           </h1>
           <p className="text-xs text-slate-500">
-            RAVS Smart School • CBSE Secondary Board 2026
+            {t('app.title')} • {t('student.semiEnglishNote')}
           </p>
         </div>
       </div>
@@ -76,25 +78,25 @@ export default function StudentHome({ onNavigate }) {
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[10.5px] font-bold text-blue-200 uppercase tracking-wider block">Gemini AI Study Bot</span>
-              <h2 className="text-base font-extrabold tracking-tight">AI Homework & Concept Tutor</h2>
+              <span className="text-[10.5px] font-bold text-blue-200 uppercase tracking-wider block">Gemini AI Assistant</span>
+              <h2 className="text-base font-extrabold tracking-tight">{t('student.askAIDoubts')}</h2>
             </div>
           </div>
 
           <span className="text-[10px] font-bold text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-500/40">
-            24/7 CBSE Assistant
+            Semi-English 24/7
           </span>
         </div>
 
         <p className="text-xs text-blue-100/90 leading-relaxed relative z-10">
-          Got stuck solving quadratic equations, science diagrams, or history questions? Get instant step-by-step NCERT explanations!
+          {t('student.aiSubtitle')} — Science & Maths in English with Marathi/Hindi guidance!
         </p>
 
         <button
           onClick={() => onNavigate('ai_doubt')}
           className="w-full py-2.5 rounded-2xl bg-white text-[#00236F] font-bold text-xs shadow-md hover:bg-blue-50 active:scale-98 transition-all flex items-center justify-center gap-2 relative z-10"
         >
-          <span>Ask Study Question Now</span>
+          <span>{t('student.askAIDoubts')}</span>
           <ArrowRight className="w-4 h-4 text-[#00236F]" />
         </button>
       </div>
@@ -111,10 +113,10 @@ export default function StudentHome({ onNavigate }) {
           </div>
           <div>
             <span className="text-xs font-bold text-slate-900 block group-hover:text-blue-700 transition-colors">
-              Classroom Connect
+              {t('student.studyNotes')}
             </span>
             <span className="text-[11px] text-slate-500 font-medium">
-              {classNotesCount} Class Notes & Teacher Q&A
+              {classNotesCount} {t('nav.study')}
             </span>
           </div>
         </button>
@@ -129,10 +131,10 @@ export default function StudentHome({ onNavigate }) {
           </div>
           <div>
             <span className="text-xs font-bold text-slate-900 block group-hover:text-purple-700 transition-colors">
-              AI Study Assistant
+              {t('student.askAIDoubts')}
             </span>
             <span className="text-[11px] text-slate-500 font-medium">
-              Ask CBSE Doubts
+              {t('nav.doubts')}
             </span>
           </div>
         </button>
@@ -147,10 +149,10 @@ export default function StudentHome({ onNavigate }) {
           </div>
           <div>
             <span className="text-xs font-bold text-slate-900 block group-hover:text-amber-700 transition-colors">
-              School Circulars
+              {t('nav.notices')}
             </span>
             <span className="text-[11px] text-slate-500 font-medium">
-              {notices.length} Active Alerts
+              {notices.length} {t('common.all')}
             </span>
           </div>
         </button>
@@ -165,10 +167,10 @@ export default function StudentHome({ onNavigate }) {
           </div>
           <div>
             <span className="text-xs font-bold text-slate-900 block group-hover:text-emerald-700 transition-colors">
-              Bus Tracker
+              {t('student.liveBusTrack')}
             </span>
             <span className="text-[11px] text-slate-500 font-medium">
-              {isTripActive ? `${currentEta}m ETA` : 'BUS-01 Standby'}
+              {isTripActive ? (currentSpeed > 0 ? `${currentSpeed} km/h` : t('common.active')) : t('common.standby')}
             </span>
           </div>
         </button>
@@ -183,7 +185,7 @@ export default function StudentHome({ onNavigate }) {
           <div>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Class 8-A Incharge</span>
             <h3 className="text-xs font-bold text-slate-900">Mrs. Priya Sharma</h3>
-            <p className="text-[11px] text-slate-500">Senior Mathematics Department</p>
+            <p className="text-[11px] text-slate-500">Mathematics & Science</p>
           </div>
         </div>
 
@@ -191,7 +193,7 @@ export default function StudentHome({ onNavigate }) {
           onClick={() => onNavigate('notes')}
           className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs transition-all flex items-center gap-1"
         >
-          <span>Ask Doubt</span>
+          <span>{t('student.askTeacher')}</span>
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>

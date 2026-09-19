@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useSchool } from '../../context/SchoolContext';
+import { useTranslation } from 'react-i18next';
+import LanguageSwitcher from '../common/LanguageSwitcher';
 import { 
   ShieldCheck, 
   Lock, 
@@ -19,6 +21,7 @@ import {
 
 export default function SignInScreen() {
   const { loginAsRole } = useSchool();
+  const { t } = useTranslation();
   const [selectedRole, setSelectedRole] = useState('admin');
   const [userId, setUserId] = useState('ADMIN-0924');
   const [password, setPassword] = useState('••••••••');
@@ -28,8 +31,8 @@ export default function SignInScreen() {
   const roles = [
     {
       id: 'admin',
-      title: 'Administrator',
-      desc: 'Campus audit & fleet control',
+      title: t('auth.admin'),
+      desc: t('auth.adminDesc'),
       icon: School,
       color: 'from-blue-700 to-indigo-800',
       textColor: 'text-indigo-700',
@@ -39,8 +42,8 @@ export default function SignInScreen() {
     },
     {
       id: 'teacher',
-      title: 'Teacher',
-      desc: 'Class 8-A & daily roll-call',
+      title: t('auth.teacher'),
+      desc: t('auth.teacherDesc'),
       icon: GraduationCap,
       color: 'from-blue-600 to-blue-800',
       textColor: 'text-blue-700',
@@ -50,8 +53,8 @@ export default function SignInScreen() {
     },
     {
       id: 'student',
-      title: 'Student',
-      desc: 'Curriculum & AI Study',
+      title: t('auth.student'),
+      desc: t('auth.studentDesc'),
       icon: Sparkles,
       color: 'from-emerald-600 to-teal-700',
       textColor: 'text-emerald-700',
@@ -61,8 +64,8 @@ export default function SignInScreen() {
     },
     {
       id: 'parent',
-      title: 'Parent',
-      desc: 'Live BUS-01 transit safety',
+      title: t('auth.parent'),
+      desc: t('auth.parentDesc'),
       icon: Users,
       color: 'from-purple-600 to-indigo-700',
       textColor: 'text-purple-700',
@@ -72,8 +75,8 @@ export default function SignInScreen() {
     },
     {
       id: 'driver',
-      title: 'Transit Driver',
-      desc: 'BUS-01 hardware GPS beacon',
+      title: t('auth.driver'),
+      desc: t('auth.driverDesc'),
       icon: Bus,
       color: 'from-amber-600 to-orange-700',
       textColor: 'text-amber-800',
@@ -93,16 +96,27 @@ export default function SignInScreen() {
     loginAsRole(selectedRole);
   };
 
+  const currentRoleObj = roles.find((r) => r.id === selectedRole) || roles[0];
+  const CurrentIcon = currentRoleObj.icon;
+
   return (
     <div className="flex-1 flex flex-col justify-between p-5 bg-[#FAF8FF] relative overflow-hidden">
       {/* Ambient background glows */}
       <div className="absolute -top-16 -left-16 w-64 h-64 rounded-full bg-blue-300/20 blur-3xl pointer-events-none"></div>
       <div className="absolute top-1/2 -right-20 w-60 h-60 rounded-full bg-indigo-300/15 blur-3xl pointer-events-none"></div>
 
-      <div className="space-y-6 pt-2 relative z-10">
+      <div className="space-y-5 pt-1 relative z-10">
+        {/* Top Header bar with Language Switcher */}
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-bold uppercase tracking-widest text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200/60">
+            {t('app.tagline')}
+          </span>
+          <LanguageSwitcher />
+        </div>
+
         {/* Emblem & School Title */}
         <div className="flex flex-col items-center text-center">
-          <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-[#1E3A8A] via-indigo-700 to-blue-600 p-0.5 shadow-xl shadow-indigo-950/20 mb-3 animate-float">
+          <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-[#1E3A8A] via-indigo-700 to-blue-600 p-0.5 shadow-xl shadow-indigo-950/20 mb-2.5 animate-float">
             <div className="w-full h-full rounded-[22px] bg-white flex items-center justify-center">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" className="w-11 h-11">
                 <rect width="80" height="80" rx="20" fill="#1E3A8A" />
@@ -113,20 +127,17 @@ export default function SignInScreen() {
               </svg>
             </div>
           </div>
-          <span className="text-[11px] font-bold uppercase tracking-widest text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200/60 mb-1">
-            Enterprise Campus OS
-          </span>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">RAVS Smart School</h1>
-          <p className="text-xs text-slate-500 max-w-[260px] mt-0.5">
-            Select your institutional role or tap any demo profile to enter instantly.
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">{t('app.title')}</h1>
+          <p className="text-xs text-slate-500 max-w-[280px] mt-0.5">
+            {t('auth.subWelcome')}
           </p>
         </div>
 
         {/* 1-Tap Fast Persona Switches */}
         <div>
           <div className="flex items-center justify-between mb-2 px-1">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Quick Demo Login</span>
-            <span className="text-[10px] text-blue-600 font-semibold">1-Tap Access</span>
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">{t('auth.selectRole')}</span>
+            <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-md">1-Tap Demo</span>
           </div>
 
           <div className="grid grid-cols-5 gap-1.5">
@@ -150,8 +161,8 @@ export default function SignInScreen() {
                   >
                     <Icon className="w-4 h-4" />
                   </div>
-                  <span className={`text-[10.5px] font-bold leading-tight ${isSelected ? role.textColor : 'text-slate-700'}`}>
-                    {role.title.split(' ')[0]}
+                  <span className={`text-[10.5px] font-bold leading-tight truncate max-w-[55px] ${isSelected ? role.textColor : 'text-slate-700'}`}>
+                    {role.title}
                   </span>
                 </button>
               );
@@ -160,37 +171,31 @@ export default function SignInScreen() {
         </div>
 
         {/* Selected Role Card Info */}
-        {(() => {
-          const currentRoleObj = roles.find((r) => r.id === selectedRole);
-          const Icon = currentRoleObj.icon;
-          return (
-            <div className={`p-3.5 rounded-2xl border ${currentRoleObj.bgColor} ${currentRoleObj.borderColor} flex items-center gap-3`}>
-              <div className={`w-10 h-10 rounded-xl bg-gradient-to-tr ${currentRoleObj.color} text-white flex items-center justify-center shadow-sm`}>
-                <Icon className="w-5 h-5" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-slate-900">{currentRoleObj.title} Access</span>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                </div>
-                <p className="text-[11px] text-slate-600 truncate">{currentRoleObj.desc}</p>
-              </div>
-              <button
-                onClick={() => loginAsRole(selectedRole)}
-                className="px-3 py-1.5 rounded-xl bg-[#1E3A8A] text-white text-xs font-bold shadow-sm hover:bg-blue-800 active:scale-95 transition-all flex items-center gap-1 flex-shrink-0"
-              >
-                <span>Enter</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
+        <div className={`p-3.5 rounded-2xl border ${currentRoleObj.bgColor} ${currentRoleObj.borderColor} flex items-center gap-3`}>
+          <div className={`w-10 h-10 rounded-xl bg-gradient-to-tr ${currentRoleObj.color} text-white flex items-center justify-center shadow-sm flex-shrink-0`}>
+            <CurrentIcon className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-slate-900">{currentRoleObj.title}</span>
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
             </div>
-          );
-        })()}
+            <p className="text-[11px] text-slate-600 truncate">{currentRoleObj.desc}</p>
+          </div>
+          <button
+            onClick={() => loginAsRole(selectedRole)}
+            className="px-3.5 py-2 rounded-xl bg-[#1E3A8A] text-white text-xs font-bold shadow-sm hover:bg-blue-800 active:scale-95 transition-all flex items-center gap-1 flex-shrink-0"
+          >
+            <span>{t('auth.login')}</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
 
         {/* Traditional Form Login Option */}
         <form onSubmit={handleManualLogin} className="space-y-3 pt-1">
           <div>
             <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-              Institutional ID / Username
+              {t('auth.enterId')}
             </label>
             <div className="relative">
               <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -199,7 +204,7 @@ export default function SignInScreen() {
                 value={userId}
                 onChange={(e) => setUserId(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
-                placeholder="Enter institutional ID"
+                placeholder={t('auth.enterId')}
                 required
               />
             </div>
@@ -208,14 +213,14 @@ export default function SignInScreen() {
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                Security Password
+                {t('auth.enterPassword')}
               </label>
               <button
                 type="button"
                 onClick={() => setShowHelpModal(true)}
                 className="text-[11px] text-blue-700 font-semibold hover:underline"
               >
-                Forgot?
+                Help?
               </button>
             </div>
             <div className="relative">
@@ -225,7 +230,7 @@ export default function SignInScreen() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full pl-10 pr-10 py-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
-                placeholder="Enter password"
+                placeholder={t('auth.enterPassword')}
                 required
               />
               <button
@@ -242,20 +247,20 @@ export default function SignInScreen() {
             type="submit"
             className="w-full py-3 rounded-xl bg-gradient-to-r from-[#1E3A8A] to-blue-700 text-white font-bold text-xs shadow-lg shadow-blue-900/20 hover:from-blue-900 hover:to-blue-800 active:scale-95 transition-all flex items-center justify-center gap-2"
           >
-            <span>Sign In to School Portal</span>
+            <span>{t('auth.signIn')}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
       </div>
 
       {/* Grounding Security Footer */}
-      <div className="pt-6 pb-2 flex flex-col items-center gap-1.5 text-center relative z-10">
+      <div className="pt-4 pb-1 flex flex-col items-center gap-1 text-center relative z-10">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/90 border border-slate-200 text-[10.5px] font-medium text-slate-600 shadow-xs">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
           <span>256-Bit SSL Encrypted Campus Gateway</span>
         </div>
         <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider">
-          RAVS Smart School • Version 2.4.0
+          {t('app.title')} • {t('app.tagline')}
         </span>
       </div>
 
@@ -287,7 +292,7 @@ export default function SignInScreen() {
               onClick={() => setShowHelpModal(false)}
               className="w-full py-2.5 bg-[#1E3A8A] text-white rounded-xl text-xs font-bold hover:bg-blue-800 transition-all"
             >
-              Close
+              {t('common.close')}
             </button>
           </div>
         </div>

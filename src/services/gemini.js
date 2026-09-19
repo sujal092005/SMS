@@ -1,5 +1,5 @@
 // Google Gemini AI API Service for RAVS Smart School
-// Connected to Gemini 3.6 Flash for instant academic responses
+// Connected to Gemini Flash models for instant academic responses (Semi-English medium syllabus)
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
 
@@ -19,14 +19,15 @@ export async function askGeminiTutor(question, customApiKey = "") {
     return null;
   }
 
-  const prompt = `You are the expert RAVS Smart School AI Study Assistant for CBSE secondary & higher secondary students (Grades 5th to 12th).
+  const prompt = `You are the expert RAVS Smart School AI Study Assistant for Semi-English Medium school students (Maharashtra State Board, Grades 5th to 12th).
+In Semi-English Medium schools, Science and Mathematics are taught in English, while other subjects and explanations often bridge English, Marathi, and Hindi.
 Student Question: "${question}"
 
-Provide a structured, helpful explanation for a school student.
-Format your answer clearly with:
-1. Short overview of the concept
+Provide a structured, crystal-clear, and encouraging explanation suitable for a semi-English student.
+Format your answer with:
+1. Concept Overview (explain in simple English, mentioning Marathi / Hindi terminology in brackets where helpful)
 2. Step-by-step explanation or formula derivation
-3. Example or application
+3. Real-world example or daily-life application
 4. A pro Board Exam Tip for scoring high marks.`;
 
   const requestBody = {
@@ -46,10 +47,9 @@ Format your answer clearly with:
   };
 
   const modelsToTry = [
-    'gemini-3.6-flash',
-    'gemini-2.5-flash',
-    'gemini-flash-latest',
-    'gemini-3.7-flash'
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro'
   ];
 
   for (const model of modelsToTry) {
@@ -85,9 +85,9 @@ Format your answer clearly with:
       }
 
       return {
-        title: `CBSE Study Guide: ${question.slice(0, 45)}${question.length > 45 ? '...' : ''}`,
+        title: `Semi-English Study Guide: ${question.slice(0, 45)}${question.length > 45 ? '...' : ''}`,
         steps: lines.length > 1 ? lines : [rawText],
-        examTip: examTip || "High yield topic: Focus on exact keywords and labelled diagrams in board exams.",
+        examTip: examTip || "State Board Exam Tip: Write clear steps, define scientific terms, and draw neat diagrams.",
         text: rawText,
         modelUsed: model
       };

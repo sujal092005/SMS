@@ -1,18 +1,32 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useSchool } from '../../context/SchoolContext';
-import { 
-  Bus, 
-  MapPin, 
-  ArrowLeft, 
-  Gauge, 
-  Clock, 
-  Phone, 
-  ShieldCheck,
-  CheckCircle2
+import {
+  Bus,
+  MapPin,
+  ArrowLeft,
+  Gauge,
+  Clock,
+  Phone,
+  Navigation,
+  ExternalLink,
+  X,
+  Radio,
+  Users
 } from 'lucide-react';
 
 export default function AdminFleet({ onBack }) {
-  const { buses, isTripActive, currentSpeed, currentEta, busRouteProgress } = useSchool();
+  const { buses, isTripActive, currentSpeed, currentEta, busCoords } = useSchool();
+  const [selectedBus, setSelectedBus] = useState(null);
+
+  const handleBusTap = (bus) => setSelectedBus(bus);
+  const handleClose = () => setSelectedBus(null);
+
+  const openInMaps = (busId) => {
+    const coords = busCoords[busId];
+    if (coords) {
+      window.open(`https://www.google.com/maps?q=${coords.lat},${coords.lng}`, '_blank');
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col p-4 bg-[#FAF8FF] pb-24 space-y-4">
@@ -28,69 +42,38 @@ export default function AdminFleet({ onBack }) {
             </button>
           )}
           <div>
-            <h1 className="text-lg font-bold text-slate-900 tracking-tight">Connected Fleet Telemetry</h1>
-            <p className="text-[11px] text-slate-500">Live GPS tracking for all school transit buses</p>
+            <h1 className="text-lg font-bold text-slate-900 tracking-tight">Fleet Tracking</h1>
+            <p className="text-[11px] text-slate-500">Tap a bus to see live location</p>
           </div>
         </div>
-
         <div className="px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-[10.5px] font-bold text-amber-800 flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>{buses.length} Buses Monitored</span>
+          <span>{buses.length} Buses</span>
         </div>
       </div>
 
-      {/* Fleet Live Summary Vector Map Canvas */}
-      <div className="relative w-full h-44 rounded-3xl overflow-hidden border border-slate-200 shadow-xs bg-[#F4F6FC]">
-        <svg className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none" viewBox="0 0 400 200" fill="none">
-          <rect width="400" height="200" fill="#F4F6FC" />
-          <rect x="20" y="20" width="100" height="60" rx="8" fill="#EAEFF8" />
-          <rect x="140" y="30" width="120" height="70" rx="8" fill="#EAEFF8" />
-          <rect x="280" y="20" width="100" height="80" rx="8" fill="#E2EBE5" />
-          <rect x="40" y="110" width="160" height="70" rx="8" fill="#EAEFF8" />
-          <rect x="220" y="120" width="160" height="60" rx="8" fill="#EAEFF8" />
-          {/* Main Highway Route */}
-          <path d="M 10 100 Q 150 70 200 110 T 390 80" stroke="#CBD5E1" strokeWidth="12" strokeLinecap="round" />
-          <path d="M 10 100 Q 150 70 200 110 T 390 80" stroke="#1E3A8A" strokeWidth="4" strokeDasharray="6 6" strokeOpacity="0.4" />
-          {/* Active Bus Markers */}
-          {/* BUS-01 Animated Position */}
-          <circle cx={40 + busRouteProgress * 3.2} cy={100 - (busRouteProgress > 50 ? 10 : -5)} r="12" fill="#1E3A8A" fillOpacity="0.2" className="animate-ping" />
-          <circle cx={40 + busRouteProgress * 3.2} cy={100 - (busRouteProgress > 50 ? 10 : -5)} r="7" fill="#1E3A8A" />
-          {/* BUS-02 Static Point */}
-          <circle cx="280" cy="90" r="6" fill="#2563EB" />
-          {/* Campus Destination */}
-          <circle cx="370" cy="80" r="9" fill="#10B981" />
-        </svg>
-
-        <div className="absolute top-2.5 left-3 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-md border border-slate-200 text-[10px] font-bold text-slate-700 shadow-xs flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>Live GPS Satellite Map</span>
-        </div>
-
-        <div className="absolute bottom-2.5 right-3 px-2 py-0.5 rounded-md bg-white/90 border border-slate-200 text-[9.5px] font-bold text-slate-500">
-          Main Campus GPS Geofence
-        </div>
-      </div>
-
-      {/* Buses Detailed Roster */}
+      {/* Bus Cards — tap to see live location */}
       <div className="space-y-3">
         {buses.map((bus) => {
-          const isBus1 = bus.id === 'BUS-01';
-          const isCurrentlyActive = isBus1 ? isTripActive : bus.status === 'ON_ROUTE';
-          const speed = isBus1 ? currentSpeed : bus.speed;
-          const eta = isBus1 ? currentEta : bus.etaMinutes;
+          const liveCoords = busCoords[bus.id];
+          const isActive = Boolean(liveCoords) || bus.status === 'ON_ROUTE';
+          const speed = liveCoords?.speed !== undefined ? liveCoords.speed : (isActive ? currentSpeed : 0);
+          const eta = bus.etaMinutes || 0;
 
           return (
-            <div
+            <button
               key={bus.id}
-              className="bg-white rounded-3xl p-4 border border-slate-200/90 shadow-xs space-y-3 relative overflow-hidden"
+              onClick={() => handleBusTap(bus)}
+              className="w-full bg-white rounded-3xl p-4 border border-slate-200/90 shadow-xs space-y-3 relative overflow-hidden text-left active:scale-[0.98] transition-all hover:shadow-md hover:border-blue-200"
             >
-              {isCurrentlyActive && (
+              {isActive && (
                 <div className="absolute top-0 right-0 w-24 h-24 rounded-full bg-emerald-100/40 blur-xl pointer-events-none"></div>
               )}
 
+              {/* Bus header */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                 <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-sm">
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm text-white ${isActive ? 'bg-gradient-to-tr from-emerald-500 to-teal-600' : 'bg-gradient-to-tr from-amber-500 to-orange-500'}`}>
                     <Bus className="w-5 h-5" />
                   </div>
                   <div>
@@ -104,72 +87,128 @@ export default function AdminFleet({ onBack }) {
                   </div>
                 </div>
 
-                <div
-                  className={`px-2.5 py-1 rounded-full text-[10.5px] font-bold flex items-center gap-1.5 border ${
-                    isCurrentlyActive
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      : 'bg-slate-100 text-slate-600 border-slate-200'
-                  }`}
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      isCurrentlyActive ? 'bg-emerald-500 animate-ping' : 'bg-slate-400'
-                    }`}
-                  ></span>
-                  <span>{isCurrentlyActive ? 'On Route' : 'Standby'}</span>
+                <div className={`px-2.5 py-1 rounded-full text-[10.5px] font-bold flex items-center gap-1.5 border ${isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500 animate-ping' : 'bg-slate-400'}`}></span>
+                  <span>{isActive ? 'On Route' : 'Standby'}</span>
                 </div>
               </div>
 
-              {/* Telemetry Metrics */}
+              {/* Telemetry row */}
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="p-2 rounded-xl bg-slate-50">
                   <span className="text-[9.5px] font-bold text-slate-500 block uppercase">Speed</span>
                   <span className="text-xs font-black text-slate-800 flex items-center justify-center gap-1">
                     <Gauge className="w-3 h-3 text-blue-600" />
-                    <span>{speed} km/h</span>
+                    {speed} km/h
                   </span>
                 </div>
-
                 <div className="p-2 rounded-xl bg-slate-50">
-                  <span className="text-[9.5px] font-bold text-slate-500 block uppercase">Campus ETA</span>
+                  <span className="text-[9.5px] font-bold text-slate-500 block uppercase">ETA</span>
                   <span className="text-xs font-black text-slate-800 flex items-center justify-center gap-1">
                     <Clock className="w-3 h-3 text-amber-600" />
-                    <span>{isCurrentlyActive ? `${eta} min` : 'Standby'}</span>
+                    {isActive ? `${eta} min` : '—'}
                   </span>
                 </div>
-
                 <div className="p-2 rounded-xl bg-slate-50">
                   <span className="text-[9.5px] font-bold text-slate-500 block uppercase">Students</span>
-                  <span className="text-xs font-black text-slate-800">
-                    {bus.capacity.split(' ')[0]}
-                  </span>
+                  <span className="text-xs font-black text-slate-800">{bus.capacity?.split(' ')[0]}</span>
                 </div>
               </div>
 
-              {/* Driver Lockup */}
-              <div className="pt-1 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2 text-slate-700">
+              {/* Driver info + live location prompt */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-[#1E3A8A] text-white font-bold text-[10px] flex items-center justify-center">
-                    {bus.driverName[0]}
+                    {bus.driverName?.[0] || '?'}
                   </span>
                   <div>
-                    <span className="font-bold text-[11px] block">{bus.driverName}</span>
+                    <span className="font-bold text-[11px] block text-slate-900">{bus.driverName}</span>
                     <span className="text-[10px] text-slate-500">{bus.driverPhone}</span>
                   </div>
                 </div>
-
-                <a
-                  href={`tel:${bus.driverPhone}`}
-                  className="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10.5px] flex items-center gap-1 transition-colors"
-                >
-                  <Phone className="w-3 h-3" />
-                  <span>Call In-Cab</span>
-                </a>
+                <div className={`flex items-center gap-1 text-[10.5px] font-bold px-2.5 py-1 rounded-full border ${liveCoords ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                  {liveCoords ? <Radio className="w-3 h-3 animate-pulse" /> : <MapPin className="w-3 h-3" />}
+                  {liveCoords ? 'Tap for Live Location' : 'No GPS yet'}
+                </div>
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
+
+      {/* Live Location Modal */}
+      {selectedBus && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-end justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl p-5 space-y-4 animate-in slide-in-from-bottom duration-200">
+            {/* Modal header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-white ${Boolean(busCoords[selectedBus.id]) || selectedBus.status === 'ON_ROUTE' ? 'bg-gradient-to-tr from-emerald-500 to-teal-600' : 'bg-gradient-to-tr from-amber-500 to-orange-500'}`}>
+                  <Bus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="font-extrabold text-slate-900 text-sm">{selectedBus.busNumber} — Live Location</h2>
+                  <p className="text-[10.5px] text-slate-500">{selectedBus.plateNumber}</p>
+                </div>
+              </div>
+              <button
+                onClick={handleClose}
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 active:scale-95"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Driver details */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100">
+                <span className="text-[10px] text-slate-500 font-bold uppercase block">Driver</span>
+                <p className="text-sm font-extrabold text-slate-900">{selectedBus.driverName}</p>
+                <p className="text-[10.5px] text-slate-500">{selectedBus.driverPhone}</p>
+              </div>
+              <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100">
+                <span className="text-[10px] text-slate-500 font-bold uppercase block">Students</span>
+                <p className="text-xl font-extrabold text-slate-900">{selectedBus.capacity?.split(' ')[0]}</p>
+              </div>
+            </div>
+
+            {/* GPS Coords */}
+            {busCoords[selectedBus.id] ? (
+              <div className="bg-emerald-50 rounded-2xl p-3 border border-emerald-200 space-y-1">
+                <div className="flex items-center gap-1.5 text-emerald-700 font-bold text-xs">
+                  <Radio className="w-3.5 h-3.5 animate-pulse" />
+                  GPS Broadcasting Live
+                </div>
+                <p className="font-mono text-[11px] text-slate-700">
+                  {busCoords[selectedBus.id].lat.toFixed(6)}°N, {busCoords[selectedBus.id].lng.toFixed(6)}°E
+                </p>
+              </div>
+            ) : (
+              <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200 text-center text-xs text-slate-500">
+                GPS coordinates not yet available — bus may not have started journey.
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => openInMaps(selectedBus.id)}
+                disabled={!busCoords[selectedBus.id]}
+                className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-[#1E3A8A] to-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
+              >
+                <Navigation className="w-4 h-4" />
+                Open in Google Maps
+              </button>
+              <a
+                href={`tel:${selectedBus.driverPhone}`}
+                className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 active:scale-95 transition-all"
+              >
+                <Phone className="w-4 h-4" />
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

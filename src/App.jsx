@@ -75,6 +75,7 @@ export default function App() {
         if (currentTab === 'chat') return <TeacherFacultyChat onBack={() => setCurrentTab('home')} />;
         if (currentTab === 'hub') return <TeacherClassHub onBack={() => setCurrentTab('home')} />;
         if (currentTab === 'notices') return <StudentNotices onBack={() => setCurrentTab('home')} />;
+        if (currentTab === 'bus') return <ParentBusTracker onBack={() => setCurrentTab('home')} />;
         return <TeacherHome onNavigate={(tab) => setCurrentTab(tab)} />;
 
       case 'STUDENT':

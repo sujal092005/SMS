@@ -1,5 +1,6 @@
 import React from 'react';
 import { useSchool } from '../../context/SchoolContext';
+import { useTranslation } from 'react-i18next';
 import { 
   LayoutDashboard, 
   CheckSquare, 
@@ -9,50 +10,50 @@ import {
   Sparkles, 
   BookOpen,
   MapPin, 
-  Navigation,
+  Navigation, 
   UserCheck,
-  QrCode,
-  Users
+  QrCode
 } from 'lucide-react';
 
 export default function BottomNav({ currentTab, onTabChange }) {
   const { activeRole } = useSchool();
+  const { t } = useTranslation();
 
   const getNavItems = () => {
     switch (activeRole) {
       case 'ADMIN':
         return [
-          { id: 'home', label: 'Overview', icon: LayoutDashboard },
-          { id: 'attendance', label: 'Faculty Check-In', icon: QrCode },
-          { id: 'notices', label: 'Circulars', icon: Bell },
-          { id: 'chat', label: 'Faculty Chat', icon: MessageSquare },
-          { id: 'fleet', label: 'Fleet GPS', icon: Bus },
+          { id: 'home', label: t('nav.home'), icon: LayoutDashboard },
+          { id: 'attendance', label: t('nav.attendance'), icon: QrCode },
+          { id: 'notices', label: t('nav.notices'), icon: Bell },
+          { id: 'chat', label: t('nav.chat'), icon: MessageSquare },
+          { id: 'fleet', label: t('nav.fleet'), icon: Bus },
         ];
       case 'TEACHER':
         return [
-          { id: 'home', label: 'Home', icon: LayoutDashboard },
-          { id: 'attendance', label: 'Gate QR Clock-In', icon: QrCode },
-          { id: 'hub', label: 'Classroom Portal', icon: BookOpen },
-          { id: 'chat', label: 'Faculty Lounge', icon: MessageSquare },
+          { id: 'home', label: t('nav.home'), icon: LayoutDashboard },
+          { id: 'attendance', label: t('nav.attendance'), icon: QrCode },
+          { id: 'hub', label: t('nav.study'), icon: BookOpen },
+          { id: 'chat', label: t('nav.chat'), icon: MessageSquare },
         ];
       case 'STUDENT':
         return [
-          { id: 'home', label: 'Home', icon: LayoutDashboard },
-          { id: 'ai_doubt', label: 'Ask AI', icon: Sparkles, highlight: true },
-          { id: 'notes', label: 'Classroom Connect', icon: BookOpen },
-          { id: 'notices', label: 'Circulars', icon: Bell },
+          { id: 'home', label: t('nav.home'), icon: LayoutDashboard },
+          { id: 'ai_doubt', label: t('nav.doubts'), icon: Sparkles, highlight: true },
+          { id: 'notes', label: t('nav.study'), icon: BookOpen },
+          { id: 'notices', label: t('nav.notices'), icon: Bell },
         ];
       case 'PARENT':
         return [
-          { id: 'bus', label: 'Bus GPS', icon: Bus, highlight: true },
-          { id: 'attendance', label: 'Child Status', icon: UserCheck },
-          { id: 'notices', label: 'Circulars', icon: Bell },
+          { id: 'bus', label: t('nav.bus'), icon: Bus, highlight: true },
+          { id: 'attendance', label: t('nav.attendance'), icon: UserCheck },
+          { id: 'notices', label: t('nav.notices'), icon: Bell },
         ];
       case 'DRIVER':
         return [
-          { id: 'trip', label: 'Trip Console', icon: Navigation, highlight: true },
-          { id: 'stops', label: 'Route Stops', icon: MapPin },
-          { id: 'notices', label: 'Transit Alerts', icon: Bell },
+          { id: 'trip', label: t('nav.trip'), icon: Navigation, highlight: true },
+          { id: 'stops', label: t('driver.selectBus'), icon: MapPin },
+          { id: 'notices', label: t('nav.notices'), icon: Bell },
         ];
       default:
         return [];

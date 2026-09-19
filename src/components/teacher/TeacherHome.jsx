@@ -1,5 +1,6 @@
 import React from 'react';
 import { useSchool } from '../../context/SchoolContext';
+import { useTranslation } from 'react-i18next';
 import { 
   CheckSquare, 
   BookOpen, 
@@ -13,7 +14,8 @@ import {
   Sparkles,
   QrCode,
   MapPin,
-  UploadCloud
+  UploadCloud,
+  Bus
 } from 'lucide-react';
 
 export default function TeacherHome({ onNavigate }) {
@@ -23,6 +25,7 @@ export default function TeacherHome({ onNavigate }) {
     classNotes, 
     notices 
   } = useSchool();
+  const { t } = useTranslation();
 
   const periods = [
     { period: '1st Period', time: '08:00 - 08:45 AM', subject: 'Grade 8-A Mathematics', room: 'Room 204', status: 'In Progress' },
@@ -45,9 +48,9 @@ export default function TeacherHome({ onNavigate }) {
           </span>
         </div>
 
-        <div className="space-y-0.5">
+        <div>
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5">
-            <span>Good Morning, {currentUser?.name || 'Teacher'}</span>
+            <span>{currentUser?.name || 'Teacher'}</span>
             <span className="text-xl">👩‍🏫</span>
           </h1>
           <p className="text-xs text-slate-500">
@@ -64,17 +67,17 @@ export default function TeacherHome({ onNavigate }) {
           </div>
           <div>
             <span className="text-[10px] uppercase font-bold text-indigo-200 tracking-wider">
-              Faculty Campus Clock-In
+              {t('teacher.gateCheckIn')}
             </span>
             <h3 className="text-xs font-extrabold text-white flex items-center gap-1.5">
-              <span>{todayTeacherCheckIn.checkedIn ? 'Clocked In via Gate QR' : 'Pending Clock-In'}</span>
+              <span>{todayTeacherCheckIn.checkedIn ? t('common.verified') : t('common.standby')}</span>
               <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/20 px-1.5 py-0.2 rounded border border-emerald-400/30">
                 {todayTeacherCheckIn.time}
               </span>
             </h3>
             <p className="text-[10.5px] text-indigo-100 flex items-center gap-1 mt-0.5">
               <MapPin className="w-3 h-3 text-indigo-300" />
-              <span>{todayTeacherCheckIn.gate}</span>
+              <span className="truncate max-w-[140px]">{todayTeacherCheckIn.gate}</span>
             </p>
           </div>
         </div>
@@ -83,7 +86,7 @@ export default function TeacherHome({ onNavigate }) {
           onClick={() => onNavigate('attendance')}
           className="px-3 py-1.5 rounded-xl bg-white text-indigo-900 font-extrabold text-xs shadow-xs hover:bg-indigo-50 active:scale-95 transition-all"
         >
-          {todayTeacherCheckIn.checkedIn ? 'Details' : 'Scan Gate QR'}
+          {t('common.view')}
         </button>
       </div>
 
@@ -99,11 +102,11 @@ export default function TeacherHome({ onNavigate }) {
           </div>
           <div className="mt-auto">
             <span className="text-xs font-bold text-slate-900 block group-hover:text-indigo-700 transition-colors">
-              Campus Gate QR
+              {t('teacher.gateCheckIn')}
             </span>
             <span className="text-[11px] text-emerald-700 font-bold flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" />
-              <span>In-Time & Duty Entry</span>
+              <span>{t('teacher.checkInTime')}</span>
             </span>
           </div>
         </button>
@@ -118,10 +121,10 @@ export default function TeacherHome({ onNavigate }) {
           </div>
           <div className="mt-auto">
             <span className="text-xs font-bold text-slate-900 block group-hover:text-amber-700 transition-colors">
-              Upload Notes & Portal
+              {t('teacher.uploadNotes')}
             </span>
             <span className="text-[11px] text-slate-500 font-medium">
-              Target Class & Doubts
+              {t('teacher.notesSubtitle')}
             </span>
           </div>
         </button>
@@ -136,10 +139,10 @@ export default function TeacherHome({ onNavigate }) {
           </div>
           <div className="mt-auto">
             <span className="text-xs font-bold text-slate-900 block group-hover:text-purple-700 transition-colors">
-              Faculty Lounge
+              {t('teacher.facultyChat')}
             </span>
             <span className="text-[11px] text-slate-500 font-medium">
-              Teacher-to-Teacher Chat
+              {t('teacher.chatSubtitle')}
             </span>
           </div>
         </button>
@@ -154,10 +157,33 @@ export default function TeacherHome({ onNavigate }) {
           </div>
           <div className="mt-auto">
             <span className="text-xs font-bold text-slate-900 block group-hover:text-emerald-700 transition-colors">
-              School Circulars
+              {t('nav.notices')}
             </span>
             <span className="text-[11px] text-slate-500 font-medium">
-              {notices.length} Active Notices
+              {notices.length} {t('common.all')}
+            </span>
+          </div>
+        </button>
+
+        {/* Bus Live Tracker */}
+        <button
+          onClick={() => onNavigate('bus')}
+          className="p-4 rounded-3xl bg-white border border-slate-200/90 shadow-xs hover:shadow-md active:scale-98 transition-all text-left flex flex-col justify-between h-36 relative overflow-hidden group col-span-2"
+        >
+          <div className="flex items-center justify-between w-full">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-sm">
+              <Bus className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+              {t('common.view')}
+            </span>
+          </div>
+          <div className="mt-auto">
+            <span className="text-xs font-bold text-slate-900 block group-hover:text-amber-700 transition-colors">
+              {t('teacher.busTracking')}
+            </span>
+            <span className="text-[11px] text-slate-500 font-medium">
+              {t('teacher.busSubtitle')}
             </span>
           </div>
         </button>
@@ -168,7 +194,7 @@ export default function TeacherHome({ onNavigate }) {
         <div className="flex items-center justify-between border-b border-slate-100 pb-2">
           <div className="flex items-center gap-1.5">
             <Calendar className="w-4 h-4 text-indigo-700" />
-            <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Today's Class Schedule</h2>
+            <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider">{t('student.timetable')}</h2>
           </div>
           <span className="text-[10.5px] font-bold text-indigo-700">3 Sessions</span>
         </div>
