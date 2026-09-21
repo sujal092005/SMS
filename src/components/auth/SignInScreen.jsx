@@ -20,13 +20,16 @@ import {
 } from 'lucide-react';
 
 export default function SignInScreen() {
-  const { loginAsRole } = useSchool();
+  const { loginAsRole, loginWithFirebase, authLoading } = useSchool();
   const { t } = useTranslation();
   const [selectedRole, setSelectedRole] = useState('admin');
   const [userId, setUserId] = useState('ADMIN-0924');
-  const [password, setPassword] = useState('••••••••');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [loginMode, setLoginMode] = useState('demo'); // 'demo' or 'firebase'
+  const [authError, setAuthError] = useState('');
 
   const roles = [
     {
@@ -91,9 +94,21 @@ export default function SignInScreen() {
     setUserId(role.sampleId);
   };
 
-  const handleManualLogin = (e) => {
+  const handleManualLogin = async (e) => {
     e.preventDefault();
-    loginAsRole(selectedRole, { userId });
+    setAuthError('');
+    if (loginMode === 'firebase') {
+      if (!email.trim() || !password.trim()) {
+        setAuthError('Please enter email and password');
+        return;
+      }
+      const result = await loginWithFirebase(email.trim(), password.trim(), selectedRole);
+      if (!result.success) {
+        setAuthError(result.error || 'Authentication failed');
+      }
+    } else {
+      loginAsRole(selectedRole, { userId });
+    }
   };
 
   const currentRoleObj = roles.find((r) => r.id === selectedRole) || roles[0];
@@ -191,64 +206,130 @@ export default function SignInScreen() {
           </button>
         </div>
 
-        {/* Traditional Form Login Option */}
-        <form onSubmit={handleManualLogin} className="space-y-3 pt-1">
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-              {t('auth.enterId')}
-            </label>
-            <div className="relative">
-              <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
-                placeholder={t('auth.enterId')}
-                required
-              />
-            </div>
-          </div>
+        {/* Login Mode Toggle */}
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => { setLoginMode('demo'); setAuthError(''); }}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+              loginMode === 'demo'
+                ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                : 'bg-slate-100 text-slate-500 border border-slate-200'
+            }`}
+          >
+            🎮 Demo Login
+          </button>
+          <button
+            type="button"
+            onClick={() => { setLoginMode('firebase'); setAuthError(''); }}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+              loginMode === 'firebase'
+                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                : 'bg-slate-100 text-slate-500 border border-slate-200'
+            }`}
+          >
+            ☁️ Firebase Auth
+          </button>
+        </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                {t('auth.enterPassword')}
+        {/* Traditional Form Login Option */}
+        <form onSubmit={handleManualLogin} className="space-y-3">
+          {loginMode === 'demo' ? (
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                {t('auth.enterId')}
               </label>
-              <button
-                type="button"
-                onClick={() => setShowHelpModal(true)}
-                className="text-[11px] text-blue-700 font-semibold hover:underline"
-              >
-                Help?
-              </button>
+              <div className="relative">
+                <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={userId}
+                  onChange={(e) => setUserId(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
+                  placeholder={t('auth.enterId')}
+                  required
+                />
+              </div>
             </div>
-            <div className="relative">
-              <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-10 py-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
-                placeholder={t('auth.enterPassword')}
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
+          ) : (
+            <>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => { setEmail(e.target.value); setAuthError(''); }}
+                    className="w-full pl-10 pr-4 py-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                    placeholder="teacher@ravsschool.edu"
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                    Password
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowHelpModal(true)}
+                    className="text-[11px] text-blue-700 font-semibold hover:underline"
+                  >
+                    Help?
+                  </button>
+                </div>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => { setPassword(e.target.value); setAuthError(''); }}
+                    className="w-full pl-10 pr-10 py-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                    placeholder="Enter password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {authError && (
+            <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-semibold">
+              ⚠️ {authError}
             </div>
-          </div>
+          )}
 
           <button
             type="submit"
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-[#1E3A8A] to-blue-700 text-white font-bold text-xs shadow-lg shadow-blue-900/20 hover:from-blue-900 hover:to-blue-800 active:scale-95 transition-all flex items-center justify-center gap-2"
+            disabled={authLoading}
+            className={`w-full py-3 rounded-xl text-white font-bold text-xs shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 ${
+              loginMode === 'firebase'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 shadow-emerald-900/20 hover:from-emerald-700 hover:to-teal-700'
+                : 'bg-gradient-to-r from-[#1E3A8A] to-blue-700 shadow-blue-900/20 hover:from-blue-900 hover:to-blue-800'
+            } ${authLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
           >
-            <span>{t('auth.signIn')}</span>
-            <ArrowRight className="w-4 h-4" />
+            {authLoading ? (
+              <>
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                <span>Authenticating...</span>
+              </>
+            ) : (
+              <>
+                <span>{loginMode === 'firebase' ? '☁️ Sign In with Firebase' : t('auth.signIn')}</span>
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
           </button>
         </form>
       </div>

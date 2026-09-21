@@ -29,7 +29,15 @@ import {
   updateBusLocationInCloud,
   deleteNoticeFromCloud,
   getBackendStatus,
-  isFirebaseConnected
+  isFirebaseConnected,
+  firebaseSignIn,
+  firebaseSignOut,
+  listenToAuthState,
+  checkUserAuthorization,
+  registerSchoolUser,
+  addSingleTeacherToCloud,
+  listenToTeachers,
+  addSingleStudentToClass
 } from '../services/firebase';
 import { askGeminiTutor } from '../services/gemini';
 
@@ -49,6 +57,53 @@ export function SchoolProvider({ children }) {
     const role = localStorage.getItem('ravs_active_role');
     return role ? INITIAL_USERS[role.toLowerCase()] || null : null;
   });
+
+  // Firebase Auth state
+  const [firebaseUser, setFirebaseUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(false);
+
+  // Toast notifications
+  const [toasts, setToasts] = useState([]);
+
+  const addToast = (message, type = 'info') => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3800);
+  };
+
+  // Teachers list state (Admin managed)
+  const [teachersList, setTeachersList] = useState([
+    { id: 'tch_01', name: 'Dr. Vikram Sethi', role: 'PRINCIPAL', email: 'principal@ravsschool.edu', department: 'Administration', assignedClasses: ['ALL'] },
+    { id: 'tch_02', name: 'Prof. Sunita Rao', role: 'TEACHER', email: 'sunita.rao@ravsschool.edu', department: 'Mathematics', assignedClasses: ['8A', '10A'] },
+    { id: 'tch_03', name: 'Mr. Rajesh Sharma', role: 'TEACHER', email: 'rajesh.sharma@ravsschool.edu', department: 'Physics', assignedClasses: ['9B', '12A'] }
+  ]);
+
+  const addTeacher = async (teacherData) => {
+    setTeachersList((prev) => [teacherData, ...prev]);
+    const res = await addSingleTeacherToCloud(teacherData);
+    if (res?.success) {
+      addToast(`Teacher ${teacherData.name} registered & authorized successfully!`, 'success');
+    } else {
+      addToast(`Teacher saved locally (${res?.error || 'Offline mode'})`, 'info');
+    }
+    return res;
+  };
+
+  const addStudentToClass = async (classId, studentData) => {
+    setMultiClassRoster((prev) => {
+      const currentList = prev[classId] || [];
+      return { ...prev, [classId]: [studentData, ...currentList] };
+    });
+    const res = await addSingleStudentToClass(classId, studentData);
+    if (res?.success) {
+      addToast(`Student ${studentData.name} added to Class ${classId} database!`, 'success');
+    } else {
+      addToast(`Student saved locally (${res?.error || 'Offline mode'})`, 'info');
+    }
+    return res;
+  };
 
   // Students & Student Attendance
   const [students8A, setStudents8A] = useState(() => {
@@ -186,17 +241,6 @@ export function SchoolProvider({ children }) {
     setGeminiApiKey(newKey);
     localStorage.setItem('ravs_gemini_api_key', newKey);
     addToast('Gemini API key updated successfully!', 'success');
-  };
-
-  // Toast notifications
-  const [toasts, setToasts] = useState([]);
-
-  const addToast = (message, type = 'info') => {
-    const id = Date.now() + Math.random();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3800);
   };
 
   // Sync to localStorage
@@ -343,9 +387,9 @@ export function SchoolProvider({ children }) {
       setBusCoords(coordsMap);
     }));
 
-    // Teacher attendance logs
-    unsubs.push(listenToTeacherAttendance((logs) => {
-      if (logs.length > 0) setTeacherPunchLogs(logs);
+    // Teachers list listener
+    unsubs.push(listenToTeachers((cloudTeachers) => {
+      if (cloudTeachers.length > 0) setTeachersList(cloudTeachers);
     }));
 
     return () => unsubs.forEach((u) => u && u());
@@ -362,6 +406,7 @@ export function SchoolProvider({ children }) {
   };
 
   // Auth methods
+  // loginAsRole: Demo login (1-tap) — sets role locally without Firebase Auth
   const loginAsRole = (roleKey, customUserData = null) => {
     const roleUpper = roleKey.toUpperCase();
     let baseUser = INITIAL_USERS[roleKey.toLowerCase()];
@@ -387,9 +432,58 @@ export function SchoolProvider({ children }) {
     }
   };
 
-  const logout = () => {
+  // loginWithFirebase: Real Firebase Auth login with strict Firestore pre-authorization
+  const loginWithFirebase = async (email, password, roleKey = 'student') => {
+    setAuthLoading(true);
+
+    // 1. Authenticate with Firebase Auth
+    const result = await firebaseSignIn(email, password);
+
+    if (!result.success) {
+      setAuthLoading(false);
+      addToast(`Login failed: ${result.error}`, 'error');
+      return { success: false, error: result.error };
+    }
+
+    // 2. Verify Pre-Authorization in Firestore
+    const authCheck = await checkUserAuthorization(email);
+
+    if (!authCheck.authorized) {
+      await firebaseSignOut();
+      setAuthLoading(false);
+      const errMsg = 'Access Denied: Your account has not been registered by School Administration.';
+      addToast(errMsg, 'error');
+      return { success: false, error: errMsg };
+    }
+
+    setAuthLoading(false);
+
+    // 3. Set verified user session
+    const roleUpper = (authCheck.profile?.role || roleKey).toUpperCase();
+    const displayName = authCheck.profile?.name || result.user.displayName || email.split('@')[0];
+    const baseUser = INITIAL_USERS[roleKey.toLowerCase()];
+
+    setActiveRole(roleUpper);
+    setCurrentUser({
+      id: authCheck.profile?.id || result.user.uid,
+      role: roleUpper,
+      name: displayName,
+      title: `${roleUpper.charAt(0) + roleUpper.slice(1).toLowerCase()} • ${email}`,
+      institution: 'RAVS Smart School',
+      avatar: authCheck.profile?.avatar || baseUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      email: email,
+      firebaseUid: result.user.uid
+    });
+
+    addToast(`Welcome back, ${displayName}!`, 'success');
+    return { success: true };
+  };
+
+  const logout = async () => {
+    await firebaseSignOut();
     setActiveRole(null);
     setCurrentUser(null);
+    setFirebaseUser(null);
     addToast('Logged out successfully', 'info');
   };
 
@@ -746,7 +840,10 @@ export function SchoolProvider({ children }) {
       value={{
         activeRole,
         currentUser,
+        firebaseUser,
+        authLoading,
         loginAsRole,
+        loginWithFirebase,
         logout,
         // Teacher Campus Gate QR Attendance
         campusGateQR,
@@ -799,6 +896,10 @@ export function SchoolProvider({ children }) {
         multiClassRoster,
         setClassStudentStatus,
         markAllClassStudentsPresent,
+        // Teacher & Provisioning Management
+        teachersList,
+        addTeacher,
+        addStudentToClass,
         // Class Teacher <-> Student Interaction
         classChats,
         sendClassTeacherMessage,

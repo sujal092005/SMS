@@ -16,16 +16,21 @@ import {
   query,
   where,
   orderBy,
-  serverTimestamp,
-  enableIndexedDbPersistence,
-  writeBatch
+  serverTimestamp
 } from 'firebase/firestore';
 import {
   getAuth,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged
 } from 'firebase/auth';
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL
+} from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
@@ -39,6 +44,7 @@ const firebaseConfig = {
 let app = null;
 let db = null;
 let auth = null;
+let storage = null;
 export let isFirebaseConnected = false;
 
 try {
@@ -46,9 +52,12 @@ try {
     app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
     db = getFirestore(app);
     auth = getAuth(app);
+    try {
+      storage = getStorage(app);
+    } catch (sErr) {
+      console.info('Firebase Storage optional init warning:', sErr.message);
+    }
     isFirebaseConnected = true;
-    // Enable offline persistence
-    enableIndexedDbPersistence(db).catch(() => {});
     console.log('⚡ Firebase connected — RAVS Smart School');
   } else {
     console.info('ℹ️ Firebase offline mode (add credentials to .env to enable cloud sync)');
@@ -57,7 +66,27 @@ try {
   console.warn('Firebase init error:', err.message);
 }
 
-export { app, db, auth };
+export { app, db, auth, storage };
+
+/**
+ * Upload physical files (PDFs, images, docs) to Firebase Storage.
+ * Returns public HTTPS download URL.
+ */
+export const uploadFileToCloudStorage = async (file, pathPrefix = 'class_notes') => {
+  if (!isFirebaseConnected || !storage) {
+    return { success: false, error: 'Firebase Storage not connected', mode: 'local' };
+  }
+  try {
+    const fileId = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const fileRef = storageRef(storage, `${pathPrefix}/${fileId}`);
+    const snapshot = await uploadBytes(fileRef, file);
+    const downloadUrl = await getDownloadURL(snapshot.ref);
+    return { success: true, url: downloadUrl, fullPath: snapshot.ref.fullPath };
+  } catch (err) {
+    console.error('File upload error:', err);
+    return { success: false, error: err.message };
+  }
+};
 
 // ─── Status ──────────────────────────────────────────────────────────────────
 export const getBackendStatus = () => ({
@@ -84,7 +113,7 @@ export const listenToNotices = (callback) => {
   const q = query(col('notices'), orderBy('createdAt', 'desc'));
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  });
+  }, (err) => console.warn('Notices listener error:', err.message));
 };
 
 export const deleteNoticeFromCloud = async (id) => {
@@ -107,7 +136,7 @@ export const listenToTeacherAttendance = (callback) => {
   const q = query(col('teacher_attendance'), orderBy('savedAt', 'desc'));
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  });
+  }, (err) => console.warn('Teacher attendance listener error:', err.message));
 };
 
 // ─── 3. CLASS NOTES ───────────────────────────────────────────────────────────
@@ -129,7 +158,7 @@ export const listenToClassNotes = (classId, callback) => {
   );
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  });
+  }, (err) => console.warn('Class notes listener error:', err.message));
 };
 
 // ─── 4. FACULTY CHAT ──────────────────────────────────────────────────────────
@@ -149,7 +178,7 @@ export const listenToFacultyChat = (channelId = 'general', callback) => {
   const q = query(col(`faculty_channels/${channelId}/messages`), orderBy('timestamp', 'asc'));
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  });
+  }, (err) => console.warn('Faculty chat listener error:', err.message));
 };
 
 // ─── 5. BUS GPS LOCATION ─────────────────────────────────────────────────────
@@ -172,7 +201,7 @@ export const listenToBusLocations = (callback) => {
     const coords = {};
     snap.docs.forEach((d) => { coords[d.id] = d.data(); });
     callback(coords);
-  });
+  }, (err) => console.warn('Bus locations listener error:', err.message));
 };
 
 // ─── 6. STUDENT ATTENDANCE ────────────────────────────────────────────────────
@@ -208,57 +237,191 @@ export const listenToClassChat = (classId, callback) => {
   const q = query(col(`class_chats/${classId}/messages`), orderBy('timestamp', 'asc'));
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  });
+  }, (err) => console.warn('Class chat listener error:', err.message));
 };
 
-// ─── 8. BULK ROSTER IMPORT & ISOLATED CLASS DATABASE ─────────────────────────
-export const bulkImportStudentsToCloud = async (classId, studentList) => {
-  if (!isFirebaseConnected) return { success: false, count: studentList.length, mode: 'local' };
+
+
+// ─── AUTHENTICATION & USER PROVISIONING ──────────────────────────────────────
+
+/**
+ * Pre-authorization check: Verifies if user exists in Firestore users/teachers/students collections.
+ */
+export const checkUserAuthorization = async (email) => {
+  if (!isFirebaseConnected || !db) {
+    return { authorized: true, mode: 'local' };
+  }
   try {
-    const batch = writeBatch(db);
-    studentList.forEach((st) => {
-      const docId = st.id || st.roll || `st_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      const ref = doc(db, `classes/${classId}/students`, docId);
-      batch.set(ref, {
-        ...st,
-        classId,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
-    });
-    await batch.commit();
-    return { success: true, count: studentList.length };
-  } catch (e) {
-    console.error('Bulk student import error:', e);
-    return { success: false, error: e.message };
+    const cleanEmail = email.trim().toLowerCase();
+    
+    // 1. Check top-level users collection
+    const uQuery = query(col('users'), where('email', '==', cleanEmail));
+    const uSnap = await getDocs(uQuery);
+    if (!uSnap.empty) {
+      const uData = uSnap.docs[0].data();
+      return { authorized: true, profile: { id: uSnap.docs[0].id, ...uData } };
+    }
+
+    // 2. Check teachers collection
+    const tQuery = query(col('teachers'), where('email', '==', cleanEmail));
+    const tSnap = await getDocs(tQuery);
+    if (!tSnap.empty) {
+      const tData = tSnap.docs[0].data();
+      return { authorized: true, profile: { id: tSnap.docs[0].id, role: 'TEACHER', ...tData } };
+    }
+
+    // 3. Fallback for admin / demo emails
+    if (cleanEmail.includes('admin') || cleanEmail.includes('ravsschool.edu') || cleanEmail.includes('teacher') || cleanEmail.includes('student')) {
+      return { authorized: true, profile: { email: cleanEmail, isSystemDefault: true } };
+    }
+
+    return { authorized: false, error: 'User is not registered by School Administration.' };
+  } catch (err) {
+    console.warn('Authorization check warning:', err.message);
+    return { authorized: true }; // allow with fallback if error
   }
 };
 
-export const bulkImportTeachersToCloud = async (teacherList) => {
-  if (!isFirebaseConnected) return { success: false, count: teacherList.length, mode: 'local' };
+/**
+ * Register/Provision a new school user into Firestore (Admin function).
+ */
+export const registerSchoolUser = async (userData) => {
+  if (!isFirebaseConnected || !db) return { success: false, mode: 'local' };
   try {
-    const batch = writeBatch(db);
-    teacherList.forEach((t) => {
-      const docId = t.id || t.employeeId || `tch_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      const ref = doc(db, 'teachers', docId);
-      batch.set(ref, {
-        ...t,
-        role: 'TEACHER',
-        updatedAt: serverTimestamp()
-      }, { merge: true });
-    });
-    await batch.commit();
-    return { success: true, count: teacherList.length };
-  } catch (e) {
-    console.error('Bulk teacher import error:', e);
-    return { success: false, error: e.message };
+    const userId = userData.id || userData.email.toLowerCase().replace(/[^a-z0-9]/g, '');
+    await setDoc(docRef('users', userId), {
+      ...userData,
+      email: userData.email.toLowerCase(),
+      createdAt: serverTimestamp()
+    }, { merge: true });
+    return { success: true, id: userId };
+  } catch (err) {
+    console.error('User registration error:', err);
+    return { success: false, error: err.message };
   }
 };
 
-export const listenToClassRoster = (classId, callback) => {
-  if (!isFirebaseConnected) return () => {};
-  return onSnapshot(col(`classes/${classId}/students`), (snap) => {
-    const students = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    callback(students);
+/**
+ * Sign in with email and password via Firebase Auth.
+ * Strictly authenticates pre-registered users.
+ */
+export const firebaseSignIn = async (email, password) => {
+  if (!isFirebaseConnected || !auth) {
+    return { success: false, error: 'Firebase not connected', mode: 'local' };
+  }
+  try {
+    const cred = await signInWithEmailAndPassword(auth, email, password);
+    return { success: true, user: cred.user };
+  } catch (err) {
+    return { success: false, error: err.message, code: err.code };
+  }
+};
+
+/**
+ * Sign out of Firebase Auth.
+ */
+export const firebaseSignOut = async () => {
+  if (!isFirebaseConnected || !auth) return;
+  try {
+    await signOut(auth);
+  } catch (err) {
+    console.warn('Firebase sign-out error:', err.message);
+  }
+};
+
+/**
+ * Listen to Firebase Auth state changes.
+ * Returns an unsubscribe function.
+ */
+export const listenToAuthState = (callback) => {
+  if (!isFirebaseConnected || !auth) return () => {};
+  return onAuthStateChanged(auth, callback);
+};
+
+/**
+ * Add a single Teacher to Firestore teachers & users collections (Admin action).
+ */
+export const addSingleTeacherToCloud = async (teacherData) => {
+  if (!isFirebaseConnected || !db) return { success: false, mode: 'local' };
+  try {
+    const docId = teacherData.id || `tch_${Date.now()}`;
+    const cleanEmail = (teacherData.email || `${docId}@ravsschool.edu`).toLowerCase();
+
+    // 1. Save to teachers collection
+    await setDoc(docRef('teachers', docId), {
+      ...teacherData,
+      id: docId,
+      email: cleanEmail,
+      role: 'TEACHER',
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+
+    // 2. Register in users collection for authentication & lookup
+    await setDoc(docRef('users', docId), {
+      id: docId,
+      name: teacherData.name,
+      email: cleanEmail,
+      role: 'TEACHER',
+      department: teacherData.department || 'General Academic',
+      assignedClasses: teacherData.assignedClasses || ['8A', '10A'],
+      createdAt: serverTimestamp()
+    }, { merge: true });
+
+    return { success: true, id: docId };
+  } catch (err) {
+    console.error('Error adding teacher:', err);
+    return { success: false, error: err.message };
+  }
+};
+
+/**
+ * Real-time listener for Teachers list in Firestore.
+ */
+export const listenToTeachers = (callback) => {
+  if (!isFirebaseConnected || !db) return () => {};
+  return onSnapshot(col('teachers'), (snap) => {
+    callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
   });
 };
+
+/**
+ * Add a single Student to Firestore isolated class roster & users collections (Teacher action).
+ */
+export const addSingleStudentToClass = async (classId, studentData) => {
+  if (!isFirebaseConnected || !db) return { success: false, mode: 'local' };
+  try {
+    const docId = studentData.id || `st_${classId}_${Date.now()}`;
+    const cleanEmail = (studentData.email || studentData.parentEmail || `${docId}@ravsschool.edu`).toLowerCase();
+
+    // 1. Save to isolated class roster: classes/{classId}/students/{docId}
+    await setDoc(docRef(`classes/${classId}/students`, docId), {
+      ...studentData,
+      id: docId,
+      classId,
+      email: cleanEmail,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+
+    // 2. Register in users collection for authorization & parent/student login
+    await setDoc(docRef('users', docId), {
+      id: docId,
+      name: studentData.name,
+      roll: studentData.roll,
+      classId,
+      email: cleanEmail,
+      role: 'STUDENT',
+      parentName: studentData.parentName || '',
+      parentPhone: studentData.parentPhone || '',
+      createdAt: serverTimestamp()
+    }, { merge: true });
+
+    return { success: true, id: docId };
+  } catch (err) {
+    console.error('Error adding student:', err);
+    return { success: false, error: err.message };
+  }
+};
+
+
+
 

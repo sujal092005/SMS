@@ -19,8 +19,10 @@ export default function StudentNotices({ onBack }) {
 
   const filteredNotices = notices.filter((n) => {
     const matchesCategory = selectedCategory === 'ALL' || n.category === selectedCategory;
-    const matchesSearch = n.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          n.content.toLowerCase().includes(searchTerm.toLowerCase());
+    const titleText = (n.title || '').toLowerCase();
+    const contentText = (n.content || n.summary || '').toLowerCase();
+    const queryText = searchTerm.toLowerCase();
+    const matchesSearch = titleText.includes(queryText) || contentText.includes(queryText);
     return matchesCategory && matchesSearch;
   });
 

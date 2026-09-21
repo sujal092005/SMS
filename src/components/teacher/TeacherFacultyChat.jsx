@@ -33,8 +33,8 @@ export default function TeacherFacultyChat({ onBack }) {
   };
 
   const filteredChats = facultyChats.filter((chat) =>
-    chat.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    chat.sender.toLowerCase().includes(searchQuery.toLowerCase())
+    (chat.message || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (chat.sender || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
