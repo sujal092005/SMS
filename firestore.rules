@@ -67,8 +67,12 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    // 4. Classes collection
+    // 4. Classes collection & per-class student subcollections
     match /classes/{classId} {
+      allow read, write: if true;
+    }
+
+    match /classes/{classId}/students/{studentId} {
       allow read, write: if true;
     }
 

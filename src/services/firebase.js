@@ -542,26 +542,39 @@ export const listenToTeachersList = (callback) => {
 
 export const listenToStudentsList = (classId, callback) => {
   if (!isFirebaseConnected || !db) return () => {};
-  let q;
   if (classId && classId !== 'ALL') {
-    q = query(col('students'), where('classId', '==', classId), orderBy('rollNo', 'asc'));
-  } else {
-    q = query(col('students'), orderBy('rollNo', 'asc'));
-  }
-  return onSnapshot(q, (snap) => {
-    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    callback(list);
-  }, (err) => {
-    // Fallback if composite index missing
-    if (classId && classId !== 'ALL') {
+    const classColRef = collection(db, 'classes', classId, 'students');
+    return onSnapshot(classColRef, (snap) => {
+      let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (list.length > 0) {
+        list.sort((a, b) => (a.rollNo || '').localeCompare(b.rollNo || ''));
+        callback(list);
+      } else {
+        const simpleQ = query(col('students'), where('classId', '==', classId));
+        return onSnapshot(simpleQ, (s) => {
+          const sorted = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.rollNo || '').localeCompare(b.rollNo || ''));
+          callback(sorted);
+        });
+      }
+    }, (err) => {
+      console.warn('Per-class student listener error:', err.message);
       const simpleQ = query(col('students'), where('classId', '==', classId));
       return onSnapshot(simpleQ, (s) => {
         const sorted = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.rollNo || '').localeCompare(b.rollNo || ''));
         callback(sorted);
       });
-    }
-    console.warn('Students listener error:', err.message);
-  });
+    });
+  } else {
+    const q = query(col('students'), orderBy('rollNo', 'asc'));
+    return onSnapshot(q, (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      callback(list);
+    }, (err) => {
+      return onSnapshot(col('students'), (s) => {
+        callback(s.docs.map(d => ({ id: d.id, ...d.data() })));
+      });
+    });
+  }
 };
 
 export const listenToClassesList = (callback) => {

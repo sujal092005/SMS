@@ -427,8 +427,7 @@ export function SchoolProvider({ children }) {
       const studentLoginId = `RAVS-${cleanClass}-${cleanRoll}`;
       const studentInitialPassword = studentData.dob || '15082012';
 
-      // 1. Write students/{id}
-      await setDoc(doc(db, 'students', docId), {
+      const studentDoc = {
         id: docId,
         uid: docId,
         name: studentData.name,
@@ -441,9 +440,15 @@ export function SchoolProvider({ children }) {
         active: true,
         mustChangePassword: false,
         createdAt: serverTimestamp()
-      });
+      };
 
-      // 2. Write studentPrivate/{id}
+      // 1. Write per-class subcollection: classes/{cleanClass}/students/{id}
+      await setDoc(doc(db, 'classes', cleanClass, 'students', docId), studentDoc);
+
+      // 2. Write top-level collection: students/{id}
+      await setDoc(doc(db, 'students', docId), studentDoc);
+
+      // 3. Write studentPrivate/{id}
       await setDoc(doc(db, 'studentPrivate', docId), {
         studentId: docId,
         uid: docId,
@@ -493,7 +498,7 @@ export function SchoolProvider({ children }) {
         const studentLoginId = `RAVS-${classId}-${cleanRoll}`;
         const cleanDob = String(s.dob || '15082012').replace(/[^0-9]/g, '');
 
-        await setDoc(doc(db, 'students', docId), {
+        const studentDoc = {
           id: docId,
           uid: docId,
           name: s.name,
@@ -506,7 +511,13 @@ export function SchoolProvider({ children }) {
           active: true,
           mustChangePassword: false,
           createdAt: serverTimestamp()
-        });
+        };
+
+        // 1. Write per-class subcollection: classes/{classId}/students/{id}
+        await setDoc(doc(db, 'classes', classId, 'students', docId), studentDoc);
+
+        // 2. Write top-level collection: students/{id}
+        await setDoc(doc(db, 'students', docId), studentDoc);
 
         results.push({
           name: s.name,
