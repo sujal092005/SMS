@@ -184,17 +184,17 @@ export function SchoolProvider({ children }) {
 
     // Teachers list
     const unsubTeachers = listenToTeachersList((teachers) => {
-      if (teachers.length > 0) setTeachersList(teachers);
+      if (teachers) setTeachersList(teachers);
     });
 
     // Classes list
     const unsubClasses = listenToClassesList((cls) => {
-      if (cls.length > 0) setClassesList(cls);
+      if (cls && cls.length > 0) setClassesList(cls);
     });
 
     // Notices
     const unsubNotices = listenToNotices((items) => {
-      if (items.length > 0) setNotices(items);
+      if (items) setNotices(items);
     });
 
     // Buses
@@ -216,9 +216,7 @@ export function SchoolProvider({ children }) {
     if (!isFirebaseConnected) return;
     const targetClass = currentUser?.classId || selectedClassId || '8A';
     const unsubStudents = listenToStudentsList(currentUser?.role === 'admin' ? 'ALL' : targetClass, (list) => {
-      if (list && list.length > 0) {
-        setStudentsList(list);
-      }
+      if (list) setStudentsList(list);
     });
     return () => unsubStudents();
   }, [currentUser?.classId, currentUser?.role, selectedClassId]);
