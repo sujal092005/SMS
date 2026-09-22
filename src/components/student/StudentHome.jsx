@@ -19,11 +19,11 @@ import {
 export default function StudentHome({ onNavigate }) {
   const { 
     currentUser, 
-    notices, 
-    isTripActive, 
-    currentSpeed,
-    students8A,
-    classNotes
+    notices = [], 
+    isTripActive = false, 
+    currentSpeed = 0,
+    students8A = [],
+    classNotes = []
   } = useSchool();
   const { t } = useTranslation();
 
@@ -31,11 +31,11 @@ export default function StudentHome({ onNavigate }) {
   const studentClassName = currentUser?.assignedClass || 'Class 8-A';
 
   // Strict notes count for this class
-  const classNotesCount = classNotes.filter(
+  const classNotesCount = (classNotes || []).filter(
     (n) => n.targetClassId === studentClassId || n.targetClassId === 'ALL'
   ).length;
 
-  const currentStudent = students8A.find((s) => s.isFeatured || s.roll === '8A-14') || {
+  const currentStudent = (students8A || []).find((s) => s.isFeatured || s.roll === '8A-14') || {
     name: currentUser?.name || 'Aarav Sharma',
     roll: '8A-14',
     status: 'PRESENT'

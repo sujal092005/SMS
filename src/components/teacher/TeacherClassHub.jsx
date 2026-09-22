@@ -111,24 +111,33 @@ export default function TeacherClassHub({ onBack }) {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleUploadSubmit = (e) => {
+  const handleUploadSubmit = async (e) => {
     e.preventDefault();
-    if (!title.trim()) {
+    if (!title.trim() && !selectedFile) {
       addToast('Please enter a note title or attach a file', 'error');
       return;
     }
 
-    const matchedClass = classesList.find((c) => c.id === targetClassId);
-    const targetClassName = matchedClass ? matchedClass.label : (targetClassId === 'ALL' ? 'All Classes' : targetClassId);
+    let storageDownloadUrl = null;
+    if (selectedFile) {
+      const uploadRes = await uploadFileToCloudStorage(selectedFile, 'class_notes');
+      if (uploadRes?.success) {
+        storageDownloadUrl = uploadRes.url;
+      }
+    }
+
+    const matchedClass = (classesList || []).find((c) => (c.id || c.classId) === targetClassId);
+    const targetClassName = matchedClass ? (matchedClass.label || matchedClass.className) : (targetClassId === 'ALL' ? 'All Classes' : `Class ${targetClassId}`);
 
     uploadClassNote({
       subject,
-      title: title.trim(),
+      title: title.trim() || fileName,
       chapter: chapter.trim(),
-      summary: summary.trim() || `Study notes and handout published for ${targetClassName}.`,
+      summary: summary.trim() || `Study notes published for ${targetClassName}.`,
       fileType: filePreview ? 'IMAGE' : (fileType || 'PDF'),
-      fileName: fileName || (fileType === 'IMAGE' ? 'Handout_Image.jpg' : 'Class_Notes.pdf'),
+      fileName: fileName || 'Class_Notes.pdf',
       fileSize: fileSize || '1.4 MB',
+      fileUrl: storageDownloadUrl || null,
       fileData: filePreview || null,
       targetClassId,
       targetClassName

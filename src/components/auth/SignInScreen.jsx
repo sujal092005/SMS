@@ -16,98 +16,103 @@ import {
   Users,
   CheckCircle2,
   HelpCircle,
-  X
+  X,
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 
 export default function SignInScreen() {
-  const { loginAsRole, loginWithFirebase, authLoading } = useSchool();
+  const { loginWithId, authLoading } = useSchool();
   const { t } = useTranslation();
+  
   const [selectedRole, setSelectedRole] = useState('admin');
-  const [userId, setUserId] = useState('ADMIN-0924');
-  const [email, setEmail] = useState('');
+  const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
-  const [loginMode, setLoginMode] = useState('demo'); // 'demo' or 'firebase'
   const [authError, setAuthError] = useState('');
 
   const roles = [
     {
       id: 'admin',
-      title: t('auth.admin'),
-      desc: t('auth.adminDesc'),
+      title: t('auth.admin') || 'Admin',
+      desc: t('auth.adminDesc') || 'Headmaster & Campus Authority',
       icon: School,
       color: 'from-blue-700 to-indigo-800',
       textColor: 'text-indigo-700',
       bgColor: 'bg-indigo-50',
       borderColor: 'border-indigo-200',
-      sampleId: 'ADMIN-0924'
+      placeholder: 'e.g. ADMIN-0924'
     },
     {
       id: 'teacher',
-      title: t('auth.teacher'),
-      desc: t('auth.teacherDesc'),
+      title: t('auth.teacher') || 'Faculty',
+      desc: t('auth.teacherDesc') || 'Class Teacher & Subject Faculty',
       icon: GraduationCap,
       color: 'from-blue-600 to-blue-800',
       textColor: 'text-blue-700',
       bgColor: 'bg-blue-50',
       borderColor: 'border-blue-200',
-      sampleId: 'TCH-PRIYA8A'
+      placeholder: 'e.g. TCH-PRIYA8A'
     },
     {
       id: 'student',
-      title: t('auth.student'),
-      desc: t('auth.studentDesc'),
+      title: t('auth.student') || 'Student',
+      desc: t('auth.studentDesc') || 'Student Portal Access',
       icon: Sparkles,
       color: 'from-emerald-600 to-teal-700',
       textColor: 'text-emerald-700',
       bgColor: 'bg-emerald-50',
       borderColor: 'border-emerald-200',
-      sampleId: 'STD-AARAV14'
+      placeholder: 'e.g. RAVS-8A-014'
     },
     {
       id: 'parent',
-      title: t('auth.parent'),
-      desc: t('auth.parentDesc'),
+      title: t('auth.parent') || 'Parent',
+      desc: t('auth.parentDesc') || 'Parent Console & Child Tracker',
       icon: Users,
       color: 'from-purple-600 to-indigo-700',
       textColor: 'text-purple-700',
       bgColor: 'bg-purple-50',
       borderColor: 'border-purple-200',
-      sampleId: 'PAR-SUNITA'
+      placeholder: 'e.g. PAR-9876543210'
     },
     {
       id: 'driver',
-      title: t('auth.driver'),
-      desc: t('auth.driverDesc'),
+      title: t('auth.driver') || 'Driver',
+      desc: t('auth.driverDesc') || 'Bus Transit Captain',
       icon: Bus,
       color: 'from-amber-600 to-orange-700',
       textColor: 'text-amber-800',
       bgColor: 'bg-amber-50',
       borderColor: 'border-amber-200',
-      sampleId: 'DRV-RAJESH4'
+      placeholder: 'e.g. DRV-RAJESH4'
     }
   ];
 
   const handleRoleSelect = (role) => {
     setSelectedRole(role.id);
-    setUserId(role.sampleId);
+    setLoginId('');
+    setPassword('');
+    setAuthError('');
   };
 
-  const handleManualLogin = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setAuthError('');
-    if (loginMode === 'firebase') {
-      if (!email.trim() || !password.trim()) {
-        setAuthError('Please enter email and password');
-        return;
-      }
-      const result = await loginWithFirebase(email.trim(), password.trim(), selectedRole);
-      if (!result.success) {
-        setAuthError(result.error || 'Authentication failed');
-      }
-    } else {
-      loginAsRole(selectedRole, { userId });
+
+    if (!loginId.trim()) {
+      setAuthError('Please enter your Institutional Login ID.');
+      return;
+    }
+    if (!password.trim()) {
+      setAuthError('Please enter your password.');
+      return;
+    }
+
+    const result = await loginWithId(loginId.trim(), password.trim());
+    if (!result.success) {
+      setAuthError(result.error || 'Authentication failed. Please check your credentials.');
     }
   };
 
@@ -115,12 +120,12 @@ export default function SignInScreen() {
   const CurrentIcon = currentRoleObj.icon;
 
   return (
-    <div className="flex-1 flex flex-col justify-between p-5 bg-[#FAF8FF] relative overflow-hidden">
+    <div className="flex-1 flex flex-col justify-between p-5 bg-[#FAF8FF] relative overflow-y-auto">
       {/* Ambient background glows */}
       <div className="absolute -top-16 -left-16 w-64 h-64 rounded-full bg-blue-300/20 blur-3xl pointer-events-none"></div>
       <div className="absolute top-1/2 -right-20 w-60 h-60 rounded-full bg-indigo-300/15 blur-3xl pointer-events-none"></div>
 
-      <div className="space-y-5 pt-1 relative z-10">
+      <div className="space-y-4 pt-1 relative z-10">
         {/* Top Header bar with Language Switcher */}
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-bold uppercase tracking-widest text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200/60">
@@ -131,7 +136,7 @@ export default function SignInScreen() {
 
         {/* Emblem & School Title */}
         <div className="flex flex-col items-center text-center">
-          <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-[#1E3A8A] via-indigo-700 to-blue-600 p-0.5 shadow-xl shadow-indigo-950/20 mb-2.5 animate-float">
+          <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-[#1E3A8A] via-indigo-700 to-blue-600 p-0.5 shadow-xl shadow-indigo-950/20 mb-2 animate-float">
             <div className="w-full h-full rounded-[22px] bg-white flex items-center justify-center">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" className="w-11 h-11">
                 <rect width="80" height="80" rx="20" fill="#1E3A8A" />
@@ -144,15 +149,19 @@ export default function SignInScreen() {
           </div>
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">{t('app.title')}</h1>
           <p className="text-xs text-slate-500 max-w-[280px] mt-0.5">
-            {t('auth.subWelcome')}
+            {t('auth.subWelcome') || 'Select your role & sign in with institutional credentials'}
           </p>
         </div>
 
-        {/* 1-Tap Fast Persona Switches */}
+        {/* Role Selection Grid */}
         <div>
           <div className="flex items-center justify-between mb-2 px-1">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">{t('auth.selectRole')}</span>
-            <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-md">1-Tap Demo</span>
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              {t('auth.selectRole') || 'Select Role'}
+            </span>
+            <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-md">
+              🏫 Institutional Login
+            </span>
           </div>
 
           <div className="grid grid-cols-5 gap-1.5">
@@ -185,8 +194,8 @@ export default function SignInScreen() {
           </div>
         </div>
 
-        {/* Selected Role Card Info */}
-        <div className={`p-3.5 rounded-2xl border ${currentRoleObj.bgColor} ${currentRoleObj.borderColor} flex items-center gap-3`}>
+        {/* Selected Role Info Card */}
+        <div className={`p-3.5 rounded-2xl border ${currentRoleObj.bgColor} ${currentRoleObj.borderColor} flex items-center gap-3 shadow-xs`}>
           <div className={`w-10 h-10 rounded-xl bg-gradient-to-tr ${currentRoleObj.color} text-white flex items-center justify-center shadow-sm flex-shrink-0`}>
             <CurrentIcon className="w-5 h-5" />
           </div>
@@ -197,136 +206,87 @@ export default function SignInScreen() {
             </div>
             <p className="text-[11px] text-slate-600 truncate">{currentRoleObj.desc}</p>
           </div>
-          <button
-            onClick={() => loginAsRole(selectedRole)}
-            className="px-3.5 py-2 rounded-xl bg-[#1E3A8A] text-white text-xs font-bold shadow-sm hover:bg-blue-800 active:scale-95 transition-all flex items-center gap-1 flex-shrink-0"
-          >
-            <span>{t('auth.login')}</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
         </div>
 
-        {/* Login Mode Toggle */}
-        <div className="flex items-center gap-2 pt-1">
-          <button
-            type="button"
-            onClick={() => { setLoginMode('demo'); setAuthError(''); }}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
-              loginMode === 'demo'
-                ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                : 'bg-slate-100 text-slate-500 border border-slate-200'
-            }`}
-          >
-            🎮 Demo Login
-          </button>
-          <button
-            type="button"
-            onClick={() => { setLoginMode('firebase'); setAuthError(''); }}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
-              loginMode === 'firebase'
-                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                : 'bg-slate-100 text-slate-500 border border-slate-200'
-            }`}
-          >
-            ☁️ Firebase Auth
-          </button>
-        </div>
+        {/* Credentials Form */}
+        <form onSubmit={handleLogin} className="space-y-3">
+          {/* Login ID */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+              Institutional Login ID
+            </label>
+            <div className="relative">
+              <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={loginId}
+                onChange={(e) => { setLoginId(e.target.value); setAuthError(''); }}
+                className="w-full pl-10 pr-4 py-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
+                placeholder={currentRoleObj.placeholder}
+                autoComplete="username"
+                autoFocus
+              />
+            </div>
+          </div>
 
-        {/* Traditional Form Login Option */}
-        <form onSubmit={handleManualLogin} className="space-y-3">
-          {loginMode === 'demo' ? (
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                {t('auth.enterId')}
+          {/* Password */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                Password
               </label>
-              <div className="relative">
-                <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={userId}
-                  onChange={(e) => setUserId(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
-                  placeholder={t('auth.enterId')}
-                  required
-                />
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowHelpModal(true)}
+                className="text-[11px] text-blue-700 font-semibold hover:underline"
+              >
+                Need Help?
+              </button>
             </div>
-          ) : (
-            <>
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => { setEmail(e.target.value); setAuthError(''); }}
-                    className="w-full pl-10 pr-4 py-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                    placeholder="teacher@ravsschool.edu"
-                    required
-                  />
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                    Password
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowHelpModal(true)}
-                    className="text-[11px] text-blue-700 font-semibold hover:underline"
-                  >
-                    Help?
-                  </button>
-                </div>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => { setPassword(e.target.value); setAuthError(''); }}
-                    className="w-full pl-10 pr-10 py-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                    placeholder="Enter password"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
+            <div className="relative">
+              <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setAuthError(''); }}
+                className="w-full pl-10 pr-10 py-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
+                placeholder="Enter password"
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
 
+          {/* Error Message */}
           {authError && (
-            <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-semibold">
-              ⚠️ {authError}
+            <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-semibold flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>{authError}</span>
             </div>
           )}
 
+          {/* Sign In Button */}
           <button
             type="submit"
             disabled={authLoading}
-            className={`w-full py-3 rounded-xl text-white font-bold text-xs shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 ${
-              loginMode === 'firebase'
-                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 shadow-emerald-900/20 hover:from-emerald-700 hover:to-teal-700'
-                : 'bg-gradient-to-r from-[#1E3A8A] to-blue-700 shadow-blue-900/20 hover:from-blue-900 hover:to-blue-800'
-            } ${authLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+            className={`w-full py-3 rounded-xl text-white font-bold text-xs shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-[#1E3A8A] to-blue-700 shadow-blue-900/20 hover:from-blue-900 hover:to-blue-800 ${
+              authLoading ? 'opacity-70 cursor-not-allowed' : ''
+            }`}
           >
             {authLoading ? (
               <>
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                <span>Authenticating...</span>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Signing In...</span>
               </>
             ) : (
               <>
-                <span>{loginMode === 'firebase' ? '☁️ Sign In with Firebase' : t('auth.signIn')}</span>
+                <span>Sign In as {currentRoleObj.title}</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
@@ -334,11 +294,11 @@ export default function SignInScreen() {
         </form>
       </div>
 
-      {/* Grounding Security Footer */}
+      {/* Security Footer */}
       <div className="pt-4 pb-1 flex flex-col items-center gap-1 text-center relative z-10">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/90 border border-slate-200 text-[10.5px] font-medium text-slate-600 shadow-xs">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-          <span>256-Bit SSL Encrypted Campus Gateway</span>
+          <span>256-Bit Encrypted Institutional Gateway</span>
         </div>
         <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider">
           {t('app.title')} • {t('app.tagline')}
@@ -362,18 +322,30 @@ export default function SignInScreen() {
               </button>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Institutional credentials are provisioned by the RAVS IT Administrator. For password resets or student bus reassignments, contact:
+              Institutional credentials are provisioned by the RAVS IT Administrator. For password resets or enrollment queries, contact:
             </p>
             <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
               <p className="font-bold text-slate-900">IT Administrative Office</p>
               <p className="text-slate-600">Email: helpdesk@ravsschool.edu</p>
               <p className="text-slate-600">Phone: +91 11 2789 0044</p>
             </div>
+            <div className="p-3 bg-blue-50 rounded-2xl border border-blue-200 text-xs space-y-1.5">
+              <p className="font-bold text-blue-800 text-[11px] uppercase tracking-wider">Default Credentials</p>
+              <p className="text-slate-600">
+                <span className="font-bold text-slate-900">Admin:</span> ADMIN-0924 / Admin@123456
+              </p>
+              <p className="text-slate-600">
+                <span className="font-bold text-slate-900">Teachers:</span> Assigned by Admin during provisioning
+              </p>
+              <p className="text-slate-600">
+                <span className="font-bold text-slate-900">Students:</span> Assigned by Class Teacher during enrollment
+              </p>
+            </div>
             <button
               onClick={() => setShowHelpModal(false)}
               className="w-full py-2.5 bg-[#1E3A8A] text-white rounded-xl text-xs font-bold hover:bg-blue-800 transition-all"
             >
-              {t('common.close')}
+              {t('common.close') || 'Close'}
             </button>
           </div>
         </div>

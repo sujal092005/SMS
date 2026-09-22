@@ -19,12 +19,12 @@ import {
 
 export default function AdminAttendance({ onBack }) {
   const { 
-    attendanceStats, 
-    absentFaculty, 
-    attendanceSubmittedTime, 
-    students8A,
-    teacherPunchLogs,
-    todayTeacherCheckIn
+    attendanceStats = { present: 0, absent: 0, late: 0, total: 0, rate: 100 }, 
+    absentFaculty = [], 
+    attendanceSubmittedTime = null, 
+    students8A = [],
+    teacherPunchLogs = [],
+    todayTeacherCheckIn = { checkedIn: true, time: '07:45 AM', gate: 'Main Campus Gate A' }
   } = useSchool();
 
   const [activeTab, setActiveTab] = useState('faculty'); // 'faculty' | 'students'

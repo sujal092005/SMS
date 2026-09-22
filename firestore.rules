@@ -2,8 +2,108 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Default match
-    match /{document=**} {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getRole() {
+      return request.auth.token.role;
+    }
+
+    function getClassId() {
+      return request.auth.token.classId;
+    }
+
+    function getSections() {
+      return request.auth.token.sections;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (getRole() == 'admin' || request.auth.token.email == 'admin@ravs.school');
+    }
+
+    function isClassTeacher(cId) {
+      return isAuthenticated() && getRole() == 'classTeacher' && getClassId() == cId;
+    }
+
+    function isSubjectTeacher(cId) {
+      return isAuthenticated() && getRole() == 'subjectTeacher' && (getSections() != null && cId in getSections());
+    }
+
+    function isTeacher(cId) {
+      return isClassTeacher(cId) || isSubjectTeacher(cId) || isAdmin();
+    }
+
+    function isStudent(cId) {
+      return isAuthenticated() && getRole() == 'student' && getClassId() == cId;
+    }
+
+    function isParent() {
+      return isAuthenticated() && getRole() == 'parent';
+    }
+
+    // ── DEVELOPMENT MODE: allow all reads/writes while Firebase Auth is not yet configured ──
+    // TODO: Once Firebase Auth (Email/Password) is enabled in Firebase Console and users are
+    // migrated to real Auth accounts, tighten these rules back to role-based access.
+
+    // 1. Users collection – open for institutional admin to provision accounts
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    // 2. Students public profile collection
+    match /students/{studentId} {
+      allow read, write: if true;
+    }
+
+    // 3. Student Private collection (DOB and sensitive data)
+    match /studentPrivate/{studentId} {
+      allow read, write: if true;
+    }
+
+    // 4. Classes collection
+    match /classes/{classId} {
+      allow read, write: if true;
+    }
+
+    // 5. School configuration
+    match /school/config {
+      allow read, write: if true;
+    }
+
+    // 6. Notices collection
+    match /notices/{noticeId} {
+      allow read, write: if true;
+    }
+
+    // 7. Class Notes & Study Hub
+    match /classNotes/{noteId} {
+      allow read, write: if true;
+    }
+
+    // 8. Classroom Chats
+    match /chats/{classId}/messages/{messageId} {
+      allow read, write: if true;
+    }
+
+    // 9. Faculty Staff Chat
+    match /facultyChats/{messageId} {
+      allow read, write: if true;
+    }
+
+    // 10. Student Attendance logs
+    match /attendance/{docId} {
+      allow read, write: if true;
+    }
+
+    // 11. Teacher Campus Punch Attendance
+    match /teacherAttendance/{docId} {
+      allow read, write: if true;
+    }
+
+    // 12. Buses Telemetry & Tracking
+    match /buses/{busId} {
       allow read, write: if true;
     }
   }
