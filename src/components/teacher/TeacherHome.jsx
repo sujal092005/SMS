@@ -32,6 +32,8 @@ export default function TeacherHome({ onNavigate }) {
   const assignedClass = currentUser?.classId || '8A';
   const classStudents = studentsList.filter(s => !s.classId || s.classId === assignedClass);
 
+  const safeCheckIn = todayTeacherCheckIn || { checkedIn: false, time: '--:--', gate: 'N/A' };
+
   const periods = [
     { period: '1st Period', time: '08:00 - 08:45 AM', subject: `Grade ${assignedClass} Mathematics`, room: 'Room 204', status: 'In Progress' },
     { period: '2nd Period', time: '08:50 - 09:35 AM', subject: `Grade ${assignedClass} Science Lab`, room: 'Room 206', status: 'Upcoming' },
@@ -103,14 +105,14 @@ export default function TeacherHome({ onNavigate }) {
               {t('teacher.gateCheckIn')}
             </span>
             <h3 className="text-xs font-extrabold text-white flex items-center gap-1.5">
-              <span>{todayTeacherCheckIn.checkedIn ? t('common.verified') : t('common.standby')}</span>
+              <span>{safeCheckIn.checkedIn ? t('common.verified') : t('common.standby')}</span>
               <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/20 px-1.5 py-0.2 rounded border border-emerald-400/30">
-                {todayTeacherCheckIn.time}
+                {safeCheckIn.time}
               </span>
             </h3>
             <p className="text-[10.5px] text-slate-300 flex items-center gap-1 mt-0.5">
               <MapPin className="w-3 h-3 text-slate-400" />
-              <span className="truncate max-w-[140px]">{todayTeacherCheckIn.gate}</span>
+              <span className="truncate max-w-[140px]">{safeCheckIn.gate}</span>
             </p>
           </div>
         </div>

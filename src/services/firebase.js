@@ -229,29 +229,50 @@ export const firebaseSignInWithId = async (loginId, password) => {
   return { success: false, error: 'Invalid Login ID or Password.' };
 };
 
-export const updateUserAccountPassword = async (newPassword) => {
-  if (!auth || !auth.currentUser) {
-    return { success: false, error: 'No authenticated user found.' };
+export const updateUserAccountPassword = async (newPassword, currentUser = null) => {
+  // If the user is logged in via Firebase Auth (e.g., Admin bootstrap)
+  if (auth && auth.currentUser) {
+    try {
+      await updatePassword(auth.currentUser, newPassword);
+      if (db) {
+        await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+          password: newPassword,
+          mustChangePassword: false,
+          updatedAt: serverTimestamp()
+        });
+        // Also update in students collection if student
+        const studentSnap = await getDoc(doc(db, 'students', auth.currentUser.uid));
+        if (studentSnap.exists()) {
+          await updateDoc(doc(db, 'students', auth.currentUser.uid), {
+            password: newPassword,
+            mustChangePassword: false
+          });
+        }
+      }
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
   }
-  try {
-    await updatePassword(auth.currentUser, newPassword);
-    if (db) {
-      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+
+  // If the user is logged in via Firestore direct lookup (Teachers, Students, Parents)
+  if (currentUser && currentUser.uid && db) {
+    try {
+      // Determine collection based on role
+      const collectionName = currentUser.role === 'student' ? 'students' : 'users';
+      
+      await updateDoc(doc(db, collectionName, currentUser.uid), {
+        password: newPassword,
         mustChangePassword: false,
         updatedAt: serverTimestamp()
       });
-      // Also update in students collection if student
-      const studentSnap = await getDoc(doc(db, 'students', auth.currentUser.uid));
-      if (studentSnap.exists()) {
-        await updateDoc(doc(db, 'students', auth.currentUser.uid), {
-          mustChangePassword: false
-        });
-      }
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: 'Failed to update password in database: ' + err.message };
     }
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err.message };
   }
+
+  return { success: false, error: 'No authenticated user found.' };
 };
 
 /**
@@ -575,14 +596,29 @@ export const syncNotesToCloud = async (note) => {
 
 export const listenToClassNotes = (classId, callback) => {
   if (!isFirebaseConnected || !db) return () => {};
-  const q = query(
-    col('classNotes'),
-    where('targetClassId', 'in', [classId, 'ALL']),
-    orderBy('createdAt', 'desc')
-  );
-  return onSnapshot(q, (snap) => {
-    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  }, (err) => console.warn('Class notes listener error:', err.message));
+  try {
+    const q = query(
+      col('classNotes'),
+      where('targetClassId', 'in', [classId, 'ALL']),
+      orderBy('createdAt', 'desc')
+    );
+    return onSnapshot(q, (snap) => {
+      callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    }, (err) => {
+      console.warn('Class notes listener fallback:', err.message);
+      return onSnapshot(col('classNotes'), (snap) => {
+        const docs = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter(d => !d.targetClassId || d.targetClassId === classId || d.targetClassId === 'ALL');
+        callback(docs);
+      });
+    });
+  } catch {
+    return onSnapshot(col('classNotes'), (snap) => {
+      const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      callback(docs);
+    });
+  }
 };
 
 // ─── FACULTY CHAT ──────────────────────────────────────────────────────────
@@ -603,7 +639,37 @@ export const listenToFacultyChat = (channelId = 'general', callback) => {
   const q = query(col('facultyChats'), orderBy('timestamp', 'asc'));
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  }, (err) => console.warn('Faculty chat listener error:', err.message));
+  }, (err) => {
+    console.warn('Faculty chat listener fallback:', err.message);
+    return onSnapshot(col('facultyChats'), (snap) => {
+      callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+  });
+};
+
+// ─── CLASS CHAT (Teacher ↔ Student) ────────────────────────────────────────
+export const sendClassChatToCloud = async (classId, message) => {
+  if (!isFirebaseConnected || !db) return { success: false, mode: 'local' };
+  try {
+    const ref = await addDoc(col(`chats/${classId}/messages`), {
+      ...message,
+      timestamp: serverTimestamp()
+    });
+    return { success: true, id: ref.id };
+  } catch (e) { console.error('Class chat sync:', e); return { success: false, error: e.message }; }
+};
+
+export const listenToClassChat = (classId, callback) => {
+  if (!isFirebaseConnected || !db) return () => {};
+  const q = query(col(`chats/${classId}/messages`), orderBy('timestamp', 'asc'));
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (err) => {
+    console.warn('Class chat listener fallback:', err.message);
+    return onSnapshot(col(`chats/${classId}/messages`), (snap) => {
+      callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+  });
 };
 
 // ─── BUS GPS LOCATION ──────────────────────────────────────────────────────
@@ -644,26 +710,6 @@ export const submitStudentAttendanceToCloud = async (classId, students, teacherI
     }, { merge: true });
     return { success: true, id: sessionId };
   } catch (e) { console.error('Student attendance sync:', e); return { success: false, error: e.message }; }
-};
-
-// ─── CLASS CHAT (Teacher ↔ Student) ────────────────────────────────────────
-export const sendClassChatToCloud = async (classId, message) => {
-  if (!isFirebaseConnected || !db) return { success: false, mode: 'local' };
-  try {
-    const ref = await addDoc(col(`chats/${classId}/messages`), {
-      ...message,
-      timestamp: serverTimestamp()
-    });
-    return { success: true, id: ref.id };
-  } catch (e) { console.error('Class chat sync:', e); return { success: false, error: e.message }; }
-};
-
-export const listenToClassChat = (classId, callback) => {
-  if (!isFirebaseConnected || !db) return () => {};
-  const q = query(col(`chats/${classId}/messages`), orderBy('timestamp', 'asc'));
-  return onSnapshot(q, (snap) => {
-    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  }, (err) => console.warn('Class chat listener error:', err.message));
 };
 
 export const getBackendStatus = () => ({

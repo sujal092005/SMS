@@ -238,18 +238,47 @@ export function SchoolProvider({ children }) {
     if (!isFirebaseConnected) return;
     if (activeRole === 'ADMIN' || activeRole === 'TEACHER') {
       const unsubFaculty = listenToFacultyChat('general', (msgs) => {
-        if (msgs) setFacultyChats(msgs);
+        if (msgs) {
+          const formatted = msgs.map(m => ({
+            id: m.id || `f_${Date.now()}_${Math.random()}`,
+            sender: m.sender || 'Faculty Member',
+            senderRole: m.senderRole || 'Teacher',
+            senderUid: m.senderUid,
+            message: m.message || m.text || '',
+            text: m.text || m.message || '',
+            time: m.time || 'Just now',
+            avatar: m.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+            isSelf: m.senderUid === currentUser?.uid || (currentUser && m.sender?.includes(currentUser.name))
+          }));
+          setFacultyChats(formatted);
+        }
       });
       return () => unsubFaculty();
     }
-  }, [activeRole]);
+  }, [activeRole, currentUser]);
 
   // Subscribe to class chat
   useEffect(() => {
     if (!isFirebaseConnected) return;
     const targetClass = currentUser?.classId || selectedClassId || '8A';
     const unsubClassChat = listenToClassChat(targetClass, (msgs) => {
-      if (msgs) setClassChats(msgs);
+      if (msgs) {
+        const formatted = msgs.map(m => ({
+          id: m.id || `c_${Date.now()}_${Math.random()}`,
+          sender: m.sender || 'Class Member',
+          senderRole: m.senderRole || 'Student',
+          senderUid: m.senderUid,
+          message: m.message || m.text || '',
+          text: m.text || m.message || '',
+          time: m.time || 'Just now',
+          role: m.role || (m.isTeacher ? 'TEACHER' : 'STUDENT'),
+          badge: m.badge || (m.role === 'TEACHER' || m.isTeacher ? 'Teacher Reply' : 'Student')
+        }));
+        setClassChats(prev => ({
+          ...(typeof prev === 'object' && !Array.isArray(prev) ? prev : {}),
+          [targetClass]: formatted
+        }));
+      }
     });
     return () => unsubClassChat();
   }, [currentUser?.classId, selectedClassId]);
@@ -309,7 +338,7 @@ export function SchoolProvider({ children }) {
   };
 
   const changePassword = async (newPassword) => {
-    const res = await updateUserAccountPassword(newPassword);
+    const res = await updateUserAccountPassword(newPassword, currentUser);
     if (res.success) {
       setMustChangePassword(false);
     }
@@ -325,7 +354,8 @@ export function SchoolProvider({ children }) {
       const docId = `tch_${Date.now()}`;
       const nameSlug = (teacherData.name || 'FACULTY').trim().split(' ')[0].replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
       const loginId = `TCH-${nameSlug}${Math.floor(100 + Math.random() * 900)}`;
-      const tempPassword = 'Pass@' + Math.floor(1000 + Math.random() * 9000);
+      // Use phone number as the password, fallback to a default if not provided
+      const tempPassword = (teacherData.phone && teacherData.phone.trim() !== '') ? teacherData.phone.trim() : '1234567890';
 
       const teacherDoc = {
         uid: docId,
@@ -541,11 +571,16 @@ export function SchoolProvider({ children }) {
 
   const uploadClassNote = async (noteData) => {
     const newNote = {
+      id: `cn_${Date.now()}`,
       ...noteData,
-      teacherName: currentUser?.name || 'Faculty',
+      teacher: currentUser?.name || noteData.teacherName || 'Faculty',
+      teacherName: currentUser?.name || noteData.teacherName || 'Faculty',
       teacherId: currentUser?.uid || 'tch',
-      uploadedAt: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+      uploadedAt: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+      time: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+      createdAt: new Date().toISOString()
     };
+    setClassNotes((prev) => [newNote, ...prev]);
     const res = await syncNotesToCloud(newNote);
     if (res?.success) {
       addToast('Class notes uploaded to student hub!', 'success');
@@ -554,25 +589,46 @@ export function SchoolProvider({ children }) {
   };
 
   const sendFacultyMessage = async (messageText) => {
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const message = {
+      id: `f_${Date.now()}`,
       sender: currentUser?.name || 'Faculty Member',
       senderRole: currentUser?.role || 'Teacher',
-      senderUid: currentUser?.uid,
+      senderUid: currentUser?.uid || 'user',
       text: messageText,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      message: messageText,
+      time: timeStr,
+      avatar: currentUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      isSelf: true
     };
+    setFacultyChats((prev) => [...prev, message]);
     await sendFacultyChatMessage('general', message);
   };
 
-  const sendClassMessage = async (classId, messageText) => {
+  const sendClassMessage = async (classId, messageText, isTeacher = false, badge = '') => {
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const targetClass = classId || currentUser?.classId || '8A';
     const message = {
-      sender: currentUser?.name || 'User',
-      senderRole: currentUser?.role || 'Student',
-      senderUid: currentUser?.uid,
+      id: `c_${Date.now()}`,
+      sender: currentUser?.name || (isTeacher ? 'Class Teacher' : 'Student'),
+      senderRole: currentUser?.role || (isTeacher ? 'Teacher' : 'Student'),
+      senderUid: currentUser?.uid || 'user',
       text: messageText,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      message: messageText,
+      time: timeStr,
+      role: isTeacher ? 'TEACHER' : 'STUDENT',
+      badge: badge || (isTeacher ? 'Teacher Announcement' : 'Student Doubt')
     };
-    await sendClassChatToCloud(classId, message);
+
+    setClassChats((prev) => {
+      const currentList = (typeof prev === 'object' && !Array.isArray(prev) && Array.isArray(prev[targetClass])) ? prev[targetClass] : [];
+      return {
+        ...(typeof prev === 'object' && !Array.isArray(prev) ? prev : {}),
+        [targetClass]: [...currentList, message]
+      };
+    });
+
+    await sendClassChatToCloud(targetClass, message);
   };
 
   const submitAttendance = async (classId, students, photoUrl = null) => {
@@ -598,44 +654,41 @@ export function SchoolProvider({ children }) {
       const classId = currentUser?.classId || '8A';
       const result = await askAIDoubtCallable(questionText, classId, subject);
 
-      let reply = '';
+      let replyData = null;
       if (result?.success && result.answer) {
-        reply = result.answer;
+        replyData = { text: result.answer };
       } else {
-        reply = await askGeminiTutor(questionText, geminiApiKey);
+        replyData = await askGeminiTutor(questionText, geminiApiKey);
       }
+
+      const botText = typeof replyData === 'string'
+        ? replyData
+        : (replyData?.text || replyData?.title || 'Academic guide generated.');
 
       const botMsg = {
         id: `ai_${Date.now()}`,
         sender: 'assistant',
-        text: reply,
+        text: botText,
+        aiData: typeof replyData === 'object' ? replyData : null,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setAiMessages((prev) => [...prev, botMsg]);
-    } catch {
-      // Fallback
-      try {
-        const fallbackText = await askGeminiTutor(questionText, geminiApiKey);
-        setAiMessages((prev) => [
-          ...prev,
-          {
-            id: `ai_${Date.now()}`,
-            sender: 'assistant',
-            text: fallbackText,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }
-        ]);
-      } catch {
-        setAiMessages((prev) => [
-          ...prev,
-          {
-            id: `ai_err_${Date.now()}`,
-            sender: 'assistant',
-            text: '💡 For this syllabus concept, check with your Class Teacher during classroom interactive hours or review the Class Notes section!',
-            timestamp: 'Just now'
-          }
-        ]);
-      }
+    } catch (err) {
+      console.warn('AI Assistant error:', err);
+      const fallbackData = await askGeminiTutor(questionText, geminiApiKey);
+      const botText = typeof fallbackData === 'string'
+        ? fallbackData
+        : (fallbackData?.text || 'Guide generated.');
+      setAiMessages((prev) => [
+        ...prev,
+        {
+          id: `ai_${Date.now()}`,
+          sender: 'assistant',
+          text: botText,
+          aiData: typeof fallbackData === 'object' ? fallbackData : null,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
     } finally {
       setIsAiThinking(false);
     }
@@ -687,8 +740,10 @@ export function SchoolProvider({ children }) {
         uploadClassNote,
         facultyChats,
         sendFacultyMessage,
+        sendFacultyChat: sendFacultyMessage, // alias for AdminChat & TeacherFacultyChat
         classChats,
         sendClassMessage,
+        sendClassTeacherMessage: sendClassMessage, // alias for TeacherClassHub
         submitAttendance,
         attendanceStats,
         teacherPunchLogs,
@@ -701,8 +756,10 @@ export function SchoolProvider({ children }) {
         aiMessages,
         isAiThinking,
         askAiAssistant,
+        askAIDoubt: askAiAssistant, // alias for AIDoubtAssistant
         geminiApiKey,
         setGeminiApiKey,
+        updateGeminiApiKey: setGeminiApiKey, // alias for AIDoubtAssistant
         isFirebaseConnected
       }}
     >
