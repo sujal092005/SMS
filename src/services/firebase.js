@@ -712,6 +712,13 @@ export const submitStudentAttendanceToCloud = async (classId, students, teacherI
   } catch (e) { console.error('Student attendance sync:', e); return { success: false, error: e.message }; }
 };
 
+export const listenToStudentAttendance = (callback) => {
+  if (!isFirebaseConnected || !db) return () => {};
+  return onSnapshot(col('attendance'), (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (err) => console.warn('Student attendance listener error:', err.message));
+};
+
 export const getBackendStatus = () => ({
   status: isFirebaseConnected ? 'CLOUD' : 'LOCAL',
   label: isFirebaseConnected ? '☁️ Firebase Live' : '💾 Local Storage',

@@ -47,6 +47,7 @@ import {
   listenToTeacherAttendance,
   syncAttendanceToCloud,
   submitStudentAttendanceToCloud,
+  listenToStudentAttendance,
   uploadFileToCloudStorage,
   getBackendStatus
 } from '../services/firebase';
@@ -202,12 +203,18 @@ export function SchoolProvider({ children }) {
       setBusCoords(coords);
     });
 
+    // Student Attendance Records
+    const unsubAtt = listenToStudentAttendance((records) => {
+      if (records) setAttendanceRecords(records);
+    });
+
     return () => {
       unsubConfig();
       unsubTeachers();
       unsubClasses();
       unsubNotices();
       unsubBuses();
+      unsubAtt();
     };
   }, []);
 
@@ -692,12 +699,80 @@ export function SchoolProvider({ children }) {
     }
   };
 
-  const attendanceStats = {
-    total: studentsList.length || 40,
-    present: studentsList.filter((s) => s.status !== 'absent').length || 38,
-    absent: studentsList.filter((s) => s.status === 'absent').length || 2,
-    rate: Math.round(((studentsList.filter((s) => s.status !== 'absent').length || 38) / (studentsList.length || 40)) * 100)
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
+
+  const getClassAttendance = (classId) => {
+    const classSts = studentsList.filter((s) => s.classId === classId);
+    if (classSts.length === 0) {
+      return { classId, total: 0, present: 0, absent: 0, late: 0, rate: 100, isSubmitted: false, students: [] };
+    }
+
+    const latestRecord = attendanceRecords.find((r) => r.classId === classId);
+    let present = 0;
+    let absent = 0;
+    let late = 0;
+
+    if (latestRecord && Array.isArray(latestRecord.students)) {
+      latestRecord.students.forEach((s) => {
+        const st = (s.status || '').toUpperCase();
+        if (st === 'ABSENT') absent++;
+        else if (st === 'LATE') late++;
+        else present++;
+      });
+    } else {
+      classSts.forEach((s) => {
+        const st = (s.status || '').toUpperCase();
+        if (st === 'ABSENT') absent++;
+        else if (st === 'LATE') late++;
+        else present++;
+      });
+    }
+
+    const total = classSts.length;
+    const rate = Math.round((present / total) * 100);
+
+    return {
+      classId,
+      total,
+      present,
+      absent,
+      late,
+      rate,
+      isSubmitted: !!latestRecord,
+      submittedAt: latestRecord?.date || null,
+      photoUrl: latestRecord?.photoUrl || null,
+      students: latestRecord?.students || classSts
+    };
   };
+
+  const calculateTotalAttendance = () => {
+    if (studentsList.length === 0) {
+      return { total: 0, present: 0, absent: 0, late: 0, rate: 100 };
+    }
+
+    let totPresent = 0;
+    let totAbsent = 0;
+    let totLate = 0;
+
+    classesList.forEach((c) => {
+      const cId = c.id || c.classId;
+      const cStats = getClassAttendance(cId);
+      totPresent += cStats.present;
+      totAbsent += cStats.absent;
+      totLate += cStats.late;
+    });
+
+    const tot = studentsList.length;
+    return {
+      total: tot,
+      present: totPresent,
+      absent: totAbsent,
+      late: totLate,
+      rate: Math.round((totPresent / tot) * 100)
+    };
+  };
+
+  const attendanceStats = calculateTotalAttendance();
 
   return (
     <SchoolContext.Provider
@@ -744,6 +819,8 @@ export function SchoolProvider({ children }) {
         sendClassTeacherMessage: sendClassMessage, // alias for TeacherClassHub
         submitAttendance,
         attendanceStats,
+        attendanceRecords,
+        getClassAttendance,
         teacherPunchLogs,
         buses,
         busCoords,
