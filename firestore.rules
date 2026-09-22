@@ -52,6 +52,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // 1b. Dedicated Teachers collection
+    match /teachers/{teacherId} {
+      allow read, write: if true;
+    }
+
     // 2. Students public profile collection
     match /students/{studentId} {
       allow read, write: if true;

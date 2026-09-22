@@ -379,6 +379,9 @@ export function SchoolProvider({ children }) {
         updatedAt: serverTimestamp()
       };
 
+      // 1. Write to dedicated teachers collection
+      await setDoc(doc(db, 'teachers', docId), teacherDoc);
+      // 2. Write to users collection for auth login lookup compatibility
       await setDoc(doc(db, 'users', docId), teacherDoc);
 
       if (teacherData.type === 'classTeacher' && teacherData.classId) {
