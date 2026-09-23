@@ -22,10 +22,8 @@ export default function AdminFleet({ onBack }) {
   const handleClose = () => setSelectedBus(null);
 
   const openInMaps = (busId) => {
-    const coords = busCoords[busId];
-    if (coords) {
-      window.open(`https://www.google.com/maps?q=${coords.lat},${coords.lng}`, '_blank');
-    }
+    const coords = busCoords[busId] || { lat: 18.5204, lng: 73.8567 };
+    window.open(`https://www.google.com/maps?q=${coords.lat},${coords.lng}`, '_blank');
   };
 
   return (
@@ -193,8 +191,7 @@ export default function AdminFleet({ onBack }) {
             <div className="flex gap-2">
               <button
                 onClick={() => openInMaps(selectedBus.id)}
-                disabled={!busCoords[selectedBus.id]}
-                className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-[#1E3A8A] to-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
+                className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-[#1E3A8A] to-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-sm"
               >
                 <Navigation className="w-4 h-4" />
                 Open in Google Maps

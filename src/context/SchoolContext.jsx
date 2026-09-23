@@ -720,21 +720,29 @@ export function SchoolProvider({ children }) {
     return res || { success: true };
   };
 
-  const startTrip = async (busId = 'BUS-01', driverDetails = {}) => {
+  const startTrip = async (busIdOrDetails = 'BUS-01', driverDetails = {}) => {
+    const busId = typeof busIdOrDetails === 'object' ? (busIdOrDetails.busId || 'BUS-01') : (busIdOrDetails || 'BUS-01');
+    const details = typeof busIdOrDetails === 'object' ? busIdOrDetails : driverDetails;
     setIsTripActive(true);
-    setCurrentSpeed(28);
+    setCurrentSpeed(details.speed || 28);
     setCurrentEta(12);
     setBuses((prev) =>
       (prev || []).map((b) =>
         b.id === busId
-          ? { ...b, status: 'ON_ROUTE', driverName: driverDetails.driverName || b.driverName, driverPhone: driverDetails.driverPhone || b.driverPhone }
+          ? {
+              ...b,
+              status: 'ON_ROUTE',
+              driverName: details.driverName || b.driverName,
+              driverPhone: details.driverPhone || b.driverPhone
+            }
           : b
       )
     );
-    addToast(`🚌 Bus Journey Started for ${busId}! GPS tracking active.`, 'success');
+    addToast(`🚌 Bus Journey Started for ${busId}! Live GPS broadcasting active.`, 'success');
   };
 
-  const stopTrip = async (busId = 'BUS-01') => {
+  const stopTrip = async (busIdOrDetails = 'BUS-01') => {
+    const busId = typeof busIdOrDetails === 'object' ? (busIdOrDetails.busId || 'BUS-01') : (busIdOrDetails || 'BUS-01');
     setIsTripActive(false);
     setCurrentSpeed(0);
     setBuses((prev) =>
@@ -757,6 +765,19 @@ export function SchoolProvider({ children }) {
         updatedAt: Date.now()
       }
     }));
+    // Also synchronize live bus card status immediately
+    setBuses((prev) =>
+      (prev || []).map((b) =>
+        b.id === busId
+          ? {
+              ...b,
+              status: 'ON_ROUTE',
+              driverName: driverInfo.driverName || b.driverName,
+              driverPhone: driverInfo.driverPhone || b.driverPhone
+            }
+          : b
+      )
+    );
     await updateBusLocationInCloud(busId, coords, driverInfo);
   };
 

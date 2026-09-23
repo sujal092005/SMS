@@ -32,11 +32,10 @@ export default function ParentBusTracker({ onBack }) {
   const [selectedBus, setSelectedBus] = useState(null);
 
   const openInMaps = (busId) => {
-    const coords = busCoords[busId];
-    if (coords) {
-      window.open(`https://www.google.com/maps?q=${coords.lat},${coords.lng}`, '_blank');
-    } else {
-      addToast('Live location not available yet — driver may not have started journey.', 'info');
+    const coords = busCoords[busId] || { lat: 18.5204, lng: 73.8567 };
+    window.open(`https://www.google.com/maps?q=${coords.lat},${coords.lng}`, '_blank');
+    if (!busCoords[busId]) {
+      addToast('Showing Campus base route — live GPS will update once driver starts trip.', 'info');
     }
   };
 
@@ -198,8 +197,7 @@ export default function ParentBusTracker({ onBack }) {
             <div className="flex gap-2">
               <button
                 onClick={() => { openInMaps(selectedBus.id); setSelectedBus(null); }}
-                disabled={!busCoords[selectedBus.id]}
-                className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-[#1E3A8A] to-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
+                className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-[#1E3A8A] to-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-sm"
               >
                 <Navigation className="w-4 h-4" />
                 {t('parent.viewBusLocation')}
