@@ -793,15 +793,7 @@ export function SchoolProvider({ children }) {
     setIsAiThinking(true);
 
     try {
-      const classId = currentUser?.classId || '8A';
-      const result = await askAIDoubtCallable(questionText, classId, subject);
-
-      let replyData = null;
-      if (result?.success && result.answer) {
-        replyData = { text: result.answer, title: `Academic Guide (${subject})`, isGeminiLive: true };
-      } else {
-        replyData = await askGeminiTutor(questionText, geminiApiKey);
-      }
+      const replyData = await askGeminiTutor(questionText, geminiApiKey);
 
       const botText = typeof replyData === 'string'
         ? replyData
