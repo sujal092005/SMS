@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useSchool } from '../../context/SchoolContext';
+import { CLASSES_CONFIG } from '../../mockData/schoolData';
 import {
   BookOpen,
   UploadCloud,
@@ -30,21 +31,26 @@ export default function TeacherClassHub({ onBack }) {
     uploadClassNote,
     classChats,
     sendClassTeacherMessage,
+    uploadFileToCloudStorage,
     addToast
   } = useSchool();
+
+  const assignedClass = currentUser?.classId || '10A';
+  const availableClasses = (classesList && classesList.length > 0) ? classesList : CLASSES_CONFIG;
 
   const [activeTab, setActiveTab] = useState('upload'); // 'upload' | 'interact'
   const [selectedFilterClass, setSelectedFilterClass] = useState('ALL');
 
   // Upload Form State
   const [subject, setSubject] = useState('Mathematics');
-  const [targetClassId, setTargetClassId] = useState('8A');
+  const [targetClassId, setTargetClassId] = useState(assignedClass);
   const [title, setTitle] = useState('');
   const [chapter, setChapter] = useState('');
   const [summary, setSummary] = useState('');
   const [fileType, setFileType] = useState('PDF');
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
+  const [fileBlobUrl, setFileBlobUrl] = useState(null);
   const [fileName, setFileName] = useState('');
   const [fileSize, setFileSize] = useState('');
 
@@ -53,7 +59,7 @@ export default function TeacherClassHub({ onBack }) {
 
   // Teacher Reply State
   const [replyText, setReplyText] = useState('');
-  const [replyClassId, setReplyClassId] = useState('8A');
+  const [replyClassId, setReplyClassId] = useState(assignedClass);
 
   const fileInputRef = useRef(null);
 
@@ -76,21 +82,34 @@ export default function TeacherClassHub({ onBack }) {
     const sizeInMb = (file.size / (1024 * 1024)).toFixed(1);
     setFileSize(`${sizeInMb > 0 ? sizeInMb : '0.4'} MB`);
 
+    let determinedType = 'PDF';
     if (file.type.startsWith('image/')) {
-      setFileType('IMAGE');
+      determinedType = 'IMAGE';
+    } else if (file.type.includes('pdf')) {
+      determinedType = 'PDF';
+    } else if (file.type.includes('word') || file.name.endsWith('.docx') || file.name.endsWith('.doc')) {
+      determinedType = 'DOCX';
+    } else {
+      determinedType = 'DOCUMENT';
+    }
+    setFileType(determinedType);
+
+    // Create lightweight Blob URL for instant client-side download & preview
+    try {
+      const bUrl = URL.createObjectURL(file);
+      setFileBlobUrl(bUrl);
+    } catch (e) {
+      console.warn('Blob URL error:', e);
+    }
+
+    // Generate base64 preview only for small image files (<500KB)
+    if (file.type.startsWith('image/') && file.size < 500000) {
       const reader = new FileReader();
       reader.onloadend = () => {
         setFilePreview(reader.result);
       };
       reader.readAsDataURL(file);
-    } else if (file.type.includes('pdf')) {
-      setFileType('PDF');
-      setFilePreview(null);
-    } else if (file.type.includes('word') || file.name.endsWith('.docx') || file.name.endsWith('.doc')) {
-      setFileType('DOCX');
-      setFilePreview(null);
     } else {
-      setFileType('DOCUMENT');
       setFilePreview(null);
     }
 
@@ -106,6 +125,7 @@ export default function TeacherClassHub({ onBack }) {
   const handleRemoveAttachedFile = () => {
     setSelectedFile(null);
     setFilePreview(null);
+    setFileBlobUrl(null);
     setFileName('');
     setFileSize('');
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -120,28 +140,36 @@ export default function TeacherClassHub({ onBack }) {
 
     let storageDownloadUrl = null;
     if (selectedFile) {
-      const uploadRes = await uploadFileToCloudStorage(selectedFile, 'class_notes');
-      if (uploadRes?.success) {
-        storageDownloadUrl = uploadRes.url;
+      try {
+        const uploadRes = await uploadFileToCloudStorage(selectedFile, 'class_notes');
+        if (uploadRes?.success) {
+          storageDownloadUrl = uploadRes.url;
+        }
+      } catch (err) {
+        console.warn('Storage upload fallback:', err);
       }
     }
 
-    const matchedClass = (classesList || []).find((c) => (c.id || c.classId) === targetClassId);
-    const targetClassName = matchedClass ? (matchedClass.label || matchedClass.className) : (targetClassId === 'ALL' ? 'All Classes' : `Class ${targetClassId}`);
+    const matchedClass = availableClasses.find((c) => (c.id || c.classId) === targetClassId);
+    const targetClassName = matchedClass ? (matchedClass.label || matchedClass.className) : (targetClassId === 'ALL' ? 'All Classes (School-Wide)' : `Class ${targetClassId}`);
+
+    const finalUrl = storageDownloadUrl || fileBlobUrl || null;
 
     uploadClassNote({
-      subject,
-      title: title.trim() || fileName,
-      chapter: chapter.trim(),
+      subject: subject || 'General Academic',
+      title: title.trim() || fileName || 'Class Handout',
+      chapter: chapter.trim() || '',
       summary: summary.trim() || `Study notes published for ${targetClassName}.`,
-      fileType: filePreview ? 'IMAGE' : (fileType || 'PDF'),
+      fileType: fileType || 'PDF',
       fileName: fileName || 'Class_Notes.pdf',
       fileSize: fileSize || '1.4 MB',
-      fileUrl: storageDownloadUrl || null,
+      fileUrl: finalUrl,
       fileData: filePreview || null,
-      targetClassId,
-      targetClassName
+      targetClassId: targetClassId || 'ALL',
+      targetClassName: targetClassName || 'All Classes'
     });
+
+    addToast(`Published note "${title || fileName}" for ${targetClassName}!`, 'success');
 
     // Reset fields
     setTitle('');
@@ -249,7 +277,7 @@ export default function TeacherClassHub({ onBack }) {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.txt"
+                  accept="*/*"
                   onChange={handleFileChange}
                   className="hidden"
                   id="teacher-file-input"
@@ -265,10 +293,10 @@ export default function TeacherClassHub({ onBack }) {
                     </div>
                     <div>
                       <span className="text-xs font-bold text-slate-800 block">
-                        Click to select PDF, Document or Photo
+                        Click to select PDF, Document, Photo, or File
                       </span>
                       <span className="text-[10.5px] text-slate-500">
-                        Supports PDF, PNG, JPG, Word (.docx) up to 25MB
+                        Supports all file formats & unlimited file size (PDF, Images, Word, ZIP, Presentations)
                       </span>
                     </div>
                   </label>
@@ -322,24 +350,66 @@ export default function TeacherClassHub({ onBack }) {
               </div>
 
               {/* Target Classroom Selector */}
-              <div className="space-y-1">
-                <label className="text-xs font-extrabold text-slate-800 flex items-center gap-1">
-                  <Layers className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Send to Classroom (Target Audience)</span>
-                  <span className="text-rose-500">*</span>
-                </label>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-extrabold text-slate-800 flex items-center gap-1">
+                    <Layers className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Target Classroom / Audience</span>
+                    <span className="text-rose-500">*</span>
+                  </label>
+                  <span className="text-[10px] font-bold text-amber-900 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-200">
+                    {targetClassId === 'ALL' ? '🌐 All Classes (School-Wide)' : `📚 Class ${targetClassId}`}
+                  </span>
+                </div>
+
                 <select
                   value={targetClassId}
                   onChange={(e) => setTargetClassId(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-amber-300 bg-amber-50/70 text-xs font-bold text-amber-950 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full p-2.5 rounded-xl border border-amber-300 bg-amber-50/70 text-xs font-bold text-amber-950 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-xs"
                 >
-                  <option value="ALL">🌐 All Classes (School-Wide)</option>
-                  {classesList.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.label} ({c.category}) — {c.strength} Students
-                    </option>
-                  ))}
+                  <option value="ALL">🌐 All Classes (Publish to Entire School)</option>
+                  <optgroup label="Select Specific Classroom">
+                    {availableClasses.map((c) => (
+                      <option key={c.id || c.classId} value={c.id || c.classId}>
+                        📚 {c.label || `Class ${c.id}`} ({c.category || 'Academic'})
+                      </option>
+                    ))}
+                  </optgroup>
                 </select>
+
+                {/* Quick Selection Chips */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase">Quick Select:</span>
+                  <button
+                    type="button"
+                    onClick={() => setTargetClassId('ALL')}
+                    className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition-all border ${
+                      targetClassId === 'ALL'
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                        : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                    }`}
+                  >
+                    🌐 All Classes
+                  </button>
+                  {availableClasses.map((c) => {
+                    const cId = c.id || c.classId;
+                    const isSelected = targetClassId === cId;
+                    return (
+                      <button
+                        key={cId}
+                        type="button"
+                        onClick={() => setTargetClassId(cId)}
+                        className={`px-2 py-1 rounded-lg text-[10.5px] font-bold transition-all border ${
+                          isSelected
+                            ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                            : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                        }`}
+                      >
+                        {cId}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Subject & Chapter */}
@@ -438,7 +508,7 @@ export default function TeacherClassHub({ onBack }) {
                     </div>
 
                     {/* Image Attachment Preview */}
-                    {note.fileData && (
+                    {note.fileType === 'IMAGE' && note.fileData && (
                       <div
                         onClick={() => setPreviewImageModal(note.fileData)}
                         className="cursor-pointer relative rounded-2xl overflow-hidden border border-slate-200/80 max-h-48 group shadow-xs"
@@ -459,9 +529,23 @@ export default function TeacherClassHub({ onBack }) {
                       {note.summary}
                     </p>
 
+                    {/* Download Attachment Action */}
+                    {(note.fileUrl || note.fileData) && (
+                      <a
+                        href={note.fileUrl || note.fileData}
+                        download={note.fileName || `${note.title}.pdf`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold transition-all w-fit"
+                      >
+                        <Download className="w-3.5 h-3.5 text-amber-700" />
+                        <span>Download {note.fileName || 'Attachment'} ({note.fileSize || 'Document'})</span>
+                      </a>
+                    )}
+
                     <div className="flex items-center justify-between text-[10.5px] text-slate-400 border-t border-slate-200/60 pt-2">
                       <span>By {note.teacher} • {note.time}</span>
-                      <span className="font-semibold text-indigo-600">{note.downloads} Downloads</span>
+                      <span className="font-semibold text-indigo-600">Attachment Ready</span>
                     </div>
                   </div>
                 ))}

@@ -67,7 +67,7 @@ export async function askGeminiTutor(question, customApiKey = "") {
     ? customApiKey.trim() 
     : GEMINI_API_KEY;
 
-  if (apiKey && apiKey.startsWith("AIzaSy")) {
+  if (apiKey && apiKey.length > 5) {
     const prompt = `You are the expert RAVS Smart School AI Study Assistant for Semi-English Medium school students (Maharashtra State Board, Grades 5th to 12th).
 In Semi-English Medium schools, Science and Mathematics are taught in English, while other subjects and explanations often bridge English, Marathi, and Hindi.
 Student Question: "${question}"
@@ -117,7 +117,8 @@ Format your answer with:
           steps: lines.length > 1 ? lines : [rawText],
           examTip: examTip || "State Board Exam Tip: Write clear steps, define scientific terms, and draw neat diagrams.",
           text: rawText,
-          modelUsed: model
+          modelUsed: model,
+          isGeminiLive: true
         };
       } catch (err) {
         console.warn(`Failed model ${model}:`, err.message);
@@ -128,4 +129,5 @@ Format your answer with:
   // Fallback to high quality offline study tutor if API key is invalid/missing/offline
   return generateFallbackResponse(question);
 }
+
 

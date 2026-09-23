@@ -81,6 +81,17 @@ export default function TeacherAttendanceQR({ onBack }) {
           </div>
         </div>
 
+        {/* Link to Student Rollcall */}
+        <div className="mt-2.5 p-2 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
+          <span className="text-[11px] font-bold text-emerald-900">Need to mark Student Roll-Call?</span>
+          <button
+            onClick={() => onBack && onBack()}
+            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10.5px] transition-all"
+          >
+            Go to Student Tracker →
+          </button>
+        </div>
+
         {/* Tab Navigation */}
         <div className="flex items-center gap-1.5 mt-3 bg-slate-100 p-1 rounded-2xl border border-slate-200/80">
           <button

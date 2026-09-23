@@ -1,41 +1,8 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
-    function isAdmin() {
-      return isAuthenticated() && (request.auth.token.role == 'admin' || request.auth.token.email == 'admin@ravs.school');
-    }
-
-    function isTeacher() {
-      return isAuthenticated() && (request.auth.token.role == 'classTeacher' || request.auth.token.role == 'subjectTeacher' || isAdmin());
-    }
-
-    // Class study notes and PDF documents
-    match /class_notes/{allPaths=**} {
-      allow read: if isAuthenticated();
-      allow write: if isTeacher();
-    }
-
-    // Attendance photo proofs
-    match /attendance_photos/{allPaths=**} {
-      allow read: if isAuthenticated();
-      allow write: if isTeacher();
-    }
-
-    // Notice board attachments
-    match /notices/{allPaths=**} {
-      allow read: if isAuthenticated();
-      allow write: if isTeacher();
-    }
-
-    // User avatars
-    match /avatars/{userId}/{allPaths=**} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    match /{allPaths=**} {
+      allow read, write: if true;
     }
   }
 }

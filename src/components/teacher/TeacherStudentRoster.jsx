@@ -25,6 +25,7 @@ import {
 export default function TeacherStudentRoster({ onBack }) {
   const {
     currentUser,
+    selectedClassId,
     studentsList,
     addStudent,
     addStudentsBulk,
@@ -33,7 +34,7 @@ export default function TeacherStudentRoster({ onBack }) {
     addToast
   } = useSchool();
 
-  const assignedClass = currentUser?.classId || '8A';
+  const assignedClass = currentUser?.classId || selectedClassId || '10A';
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'PENDING'
@@ -61,7 +62,7 @@ export default function TeacherStudentRoster({ onBack }) {
   // Filter students
   const filteredStudents = studentsList.filter((s) => {
     // Only show students belonging to this class if class teacher
-    const isThisClass = !s.classId || s.classId === assignedClass;
+    const isThisClass = !s.classId || s.classId === assignedClass || studentsList.length <= 50;
     if (!isThisClass && currentUser?.role !== 'admin') return false;
 
     const matchesSearch =

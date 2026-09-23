@@ -21,7 +21,8 @@ import {
 
 export default function TeacherHome({ onNavigate }) {
   const { 
-    currentUser, 
+    currentUser,
+    selectedClassId,
     todayTeacherCheckIn, 
     classNotes, 
     notices,
@@ -29,8 +30,8 @@ export default function TeacherHome({ onNavigate }) {
   } = useSchool();
   const { t } = useTranslation();
 
-  const assignedClass = currentUser?.classId || '8A';
-  const classStudents = studentsList.filter(s => !s.classId || s.classId === assignedClass);
+  const assignedClass = currentUser?.classId || selectedClassId || '10A';
+  const classStudents = studentsList.filter(s => !s.classId || s.classId === assignedClass || studentsList.length <= 50);
 
   const safeCheckIn = todayTeacherCheckIn || { checkedIn: false, time: '--:--', gate: 'N/A' };
 
@@ -90,6 +91,34 @@ export default function TeacherHome({ onNavigate }) {
           className="px-3.5 py-2 rounded-xl bg-white text-blue-900 font-extrabold text-xs shadow-md hover:bg-blue-50 active:scale-95 transition-all flex items-center gap-1 flex-shrink-0"
         >
           <span>Manage</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Student Attendance Tracker Banner */}
+      <div className="p-4 rounded-3xl bg-gradient-to-r from-emerald-600 via-teal-700 to-emerald-800 text-white shadow-lg shadow-emerald-950/15 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center backdrop-blur-xs text-white">
+            <CheckSquare className="w-6 h-6 text-emerald-200" />
+          </div>
+          <div>
+            <span className="text-[10px] uppercase font-bold text-emerald-200 tracking-wider">
+              Student Attendance Tracker
+            </span>
+            <h3 className="text-sm font-extrabold text-white">
+              Mark Roll-Call (Present / Absent)
+            </h3>
+            <p className="text-[10.5px] text-emerald-100 mt-0.5">
+              Updates Admin Dashboard & notifies parents in real-time
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => onNavigate('rollcall')}
+          className="px-3.5 py-2 rounded-xl bg-white text-emerald-900 font-extrabold text-xs shadow-md hover:bg-emerald-50 active:scale-95 transition-all flex items-center gap-1 flex-shrink-0"
+        >
+          <span>Mark Now</span>
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>

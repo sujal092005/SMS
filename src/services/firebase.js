@@ -5,6 +5,7 @@ import { initializeApp, getApps } from 'firebase/app';
 import {
   getFirestore,
   collection,
+  collectionGroup,
   doc,
   setDoc,
   getDoc,
@@ -87,12 +88,23 @@ export const loginIdToAuthEmail = (loginId) => {
   return `${sanitized}@ravs.school`;
 };
 
+// ─── HELPERS ───────────────────────────────────────────────────────────────
+// Parse classId from student loginId. Format: RAVS-{CLASS}-{ROLL} e.g. RAVS-10A-001 → '10A'
+const parseClassFromLoginId = (loginId) => {
+  const parts = (loginId || '').split('-');
+  // RAVS-10A-001 has 3 parts; handle e.g. RAVS-10A-001
+  if (parts.length >= 3 && parts[0].toUpperCase() === 'RAVS') {
+    return parts[1].toUpperCase(); // '10A'
+  }
+  return null;
+};
+
 // ─── AUTHENTICATION HELPERS ────────────────────────────────────────────────
 export const firebaseSignInWithId = async (loginId, password) => {
   if (!isFirebaseConnected) {
     return { success: false, error: 'Database is not connected.' };
   }
-  
+
   const cleanId = (loginId || '').trim();
   const cleanPass = (password || '').trim();
 
@@ -100,170 +112,186 @@ export const firebaseSignInWithId = async (loginId, password) => {
     return { success: false, error: 'Please enter both Institutional Login ID and Password.' };
   }
 
-  // 1. Try Firebase Auth first if available
+  // 1. Try Firebase Auth first (for admin bootstrapped via createUserWithEmailAndPassword)
   if (auth) {
     try {
       const email = loginIdToAuthEmail(cleanId);
       const cred = await signInWithEmailAndPassword(auth, email, cleanPass);
       const idTokenResult = await cred.user.getIdTokenResult();
-      
       const userDocSnap = await getDoc(doc(db, 'users', cred.user.uid));
-      let userData = userDocSnap.exists() ? userDocSnap.data() : null;
-
+      const userData = userDocSnap.exists() ? userDocSnap.data() : null;
       if (userData && userData.active === false) {
         await signOut(auth);
         return { success: false, error: 'This account has been deactivated. Please contact administration.' };
       }
-
-      return {
-        success: true,
-        user: cred.user,
-        claims: idTokenResult.claims,
-        userData
-      };
+      return { success: true, user: cred.user, claims: idTokenResult.claims, userData };
     } catch (authErr) {
-      console.info('Firebase Auth sign-in attempted, checking Firestore database records:', authErr.code);
+      console.info('Firebase Auth sign-in fallback to Firestore lookup:', authErr.code);
     }
   }
 
-  // 2. Direct Firestore authentication lookup (users & students collections)
-  if (db) {
-    try {
-      // Check in users collection (Admin, Teacher, Driver, Parent)
-      const usersQuery = query(collection(db, 'users'), where('loginId', '==', cleanId));
-      const usersSnap = await getDocs(usersQuery);
+  if (!db) return { success: false, error: 'Invalid Login ID or Password.' };
 
-      if (!usersSnap.empty) {
-        const userDoc = usersSnap.docs[0].data();
-        const docId = usersSnap.docs[0].id;
-
-        if (userDoc.active === false) {
-          return { success: false, error: 'This account has been deactivated. Please contact administration.' };
-        }
-
-        // Validate password against document password or standard credentials
-        const validPass = userDoc.password || (userDoc.role === 'admin' ? 'Admin@123456' : (userDoc.role?.includes('Teacher') ? 'Teacher@123' : null));
-        if (validPass && cleanPass !== validPass && cleanPass !== 'Admin@123456' && cleanPass !== 'Pass@1234' && !cleanPass.startsWith('Pass@')) {
-          return { success: false, error: 'Invalid Password. Please check your credentials.' };
-        }
-
-        let uiRole = 'STUDENT';
-        if (userDoc.role === 'admin') uiRole = 'ADMIN';
-        else if (userDoc.role === 'classTeacher' || userDoc.role === 'subjectTeacher' || userDoc.role === 'teacher') uiRole = 'TEACHER';
-        else if (userDoc.role === 'parent') uiRole = 'PARENT';
-        else if (userDoc.role === 'driver') uiRole = 'DRIVER';
-
-        const profile = {
-          uid: docId,
-          loginId: userDoc.loginId || cleanId,
-          name: userDoc.name || 'User',
-          role: userDoc.role || 'admin',
-          uiRole,
+  try {
+    // ── 2. ADMIN / DRIVER / STAFF → users collection ──────────────────────
+    const usersSnap = await getDocs(query(collection(db, 'users'), where('loginId', '==', cleanId)));
+    if (!usersSnap.empty) {
+      const userDoc = usersSnap.docs[0].data();
+      const docId = usersSnap.docs[0].id;
+      if (userDoc.active === false)
+        return { success: false, error: 'This account has been deactivated. Please contact administration.' };
+      const validPass = userDoc.password || (userDoc.role === 'admin' ? 'Admin@123456' : null);
+      if (validPass && cleanPass !== validPass)
+        return { success: false, error: 'Invalid Password. Please check your credentials.' };
+      let uiRole = 'STUDENT';
+      if (userDoc.role === 'admin') uiRole = 'ADMIN';
+      else if (['classTeacher','subjectTeacher','teacher'].includes(userDoc.role)) uiRole = 'TEACHER';
+      else if (userDoc.role === 'parent') uiRole = 'PARENT';
+      else if (userDoc.role === 'driver') uiRole = 'DRIVER';
+      return {
+        success: true,
+        userData: {
+          uid: docId, loginId: userDoc.loginId || cleanId,
+          name: userDoc.name || 'User', role: userDoc.role || 'admin', uiRole,
           classId: userDoc.classId || '8A',
           sections: userDoc.sections || (userDoc.classId ? [userDoc.classId] : ['8A']),
-          active: true,
-          mustChangePassword: !!userDoc.mustChangePassword
-        };
+          active: true, mustChangePassword: !!userDoc.mustChangePassword
+        },
+        claims: { role: userDoc.role }
+      };
+    }
 
-        return {
-          success: true,
-          userData: profile,
-          claims: { role: userDoc.role }
-        };
-      }
-
-      // Check in dedicated teachers collection
-      const teachersQuery = query(collection(db, 'teachers'), where('loginId', '==', cleanId));
-      const teachersSnap = await getDocs(teachersQuery);
-
-      if (!teachersSnap.empty) {
-        const userDoc = teachersSnap.docs[0].data();
-        const docId = teachersSnap.docs[0].id;
-
-        if (userDoc.active === false) {
-          return { success: false, error: 'This account has been deactivated. Please contact administration.' };
-        }
-
-        const validPass = userDoc.password || 'Teacher@123';
-        if (validPass && cleanPass !== validPass && cleanPass !== 'Admin@123456' && cleanPass !== 'Pass@1234' && !cleanPass.startsWith('Pass@')) {
-          return { success: false, error: 'Invalid Password. Please check your credentials.' };
-        }
-
-        const profile = {
-          uid: docId,
-          loginId: userDoc.loginId || cleanId,
+    // ── 3. TEACHER → teachers flat collection (login_id field) ────────────
+    let teachersSnap = await getDocs(query(collection(db, 'teachers'), where('loginId', '==', cleanId)));
+    if (teachersSnap.empty) {
+      teachersSnap = await getDocs(query(collection(db, 'teachers'), where('login_id', '==', cleanId)));
+    }
+    if (!teachersSnap.empty) {
+      const userDoc = teachersSnap.docs[0].data();
+      const docId = teachersSnap.docs[0].id;
+      if (userDoc.active === false)
+        return { success: false, error: 'This account has been deactivated. Please contact administration.' };
+      const validPass = userDoc.password || 'Teacher@123';
+      if (validPass && cleanPass !== validPass)
+        return { success: false, error: 'Invalid Password. Please check your credentials.' };
+      const resolvedClassId = userDoc.classId || userDoc.assignedClass || (userDoc.sections && userDoc.sections[0]) || '10A';
+      return {
+        success: true,
+        userData: {
+          uid: docId, loginId: userDoc.loginId || userDoc.login_id || cleanId,
           name: userDoc.name || 'Faculty Member',
-          role: userDoc.role || 'classTeacher',
-          uiRole: 'TEACHER',
-          classId: userDoc.classId || '10A',
-          sections: userDoc.sections || (userDoc.classId ? [userDoc.classId] : ['10A']),
-          active: true,
-          mustChangePassword: !!userDoc.mustChangePassword
-        };
+          role: userDoc.role || 'classTeacher', uiRole: 'TEACHER',
+          classId: resolvedClassId,
+          sections: userDoc.sections || [resolvedClassId],
+          active: true, mustChangePassword: !!userDoc.mustChangePassword
+        },
+        claims: { role: userDoc.role || 'classTeacher' }
+      };
+    }
 
-        return {
-          success: true,
-          userData: profile,
-          claims: { role: userDoc.role }
-        };
-      }
-
-      // Check in students collection
-      const studentsQuery = query(collection(db, 'students'), where('loginId', '==', cleanId));
-      const studentsSnap = await getDocs(studentsQuery);
-
-      if (!studentsSnap.empty) {
-        const studentDoc = studentsSnap.docs[0].data();
-        const docId = studentsSnap.docs[0].id;
-
-        const profile = {
-          uid: docId,
-          loginId: studentDoc.loginId || cleanId,
-          name: studentDoc.name || 'Student',
-          role: 'student',
-          uiRole: 'STUDENT',
-          classId: studentDoc.classId || '8A',
-          sections: [studentDoc.classId || '8A'],
-          roll: studentDoc.roll || '01',
-          active: true,
-          mustChangePassword: false
-        };
-
-        return {
-          success: true,
-          userData: profile,
-          claims: { role: 'student' }
-        };
-      }
-
-      // Check for parent phone / ID format (PAR-...)
-      if (cleanId.startsWith('PAR-') || /^\d{10}$/.test(cleanId)) {
-        const phone = cleanId.replace('PAR-', '');
+    // ── 4. STUDENT → NEW: direct O(1) lookup via classes/{classId}/class_student/{loginId} ──
+    //    loginId format: RAVS-10A-001 — parse class from it, then getDoc directly
+    const parsedClass = parseClassFromLoginId(cleanId);
+    if (parsedClass) {
+      const studentDocSnap = await getDoc(doc(db, 'classes', parsedClass, 'class_student', cleanId));
+      if (studentDocSnap.exists()) {
+        const sd = studentDocSnap.data();
+        const validPass = sd.password || sd.dob || '15082012';
+        if (validPass && cleanPass !== validPass)
+          return { success: false, error: 'Invalid Password. Your login password is your Date of Birth (DDMMYYYY).' };
         return {
           success: true,
           userData: {
-            uid: `par_${phone}`,
-            loginId: `PAR-${phone}`,
-            name: `Parent (${phone})`,
-            role: 'parent',
-            uiRole: 'PARENT',
-            classId: '8A',
-            phone,
-            active: true
+            uid: cleanId, loginId: sd.login_id || cleanId,
+            name: sd.name || 'Student', role: 'student', uiRole: 'STUDENT',
+            classId: sd.classId || parsedClass,
+            sections: [sd.classId || parsedClass],
+            rollNo: sd.rollNo || '001', roll: sd.rollNo || '01',
+            active: sd.active !== false, mustChangePassword: false
           },
-          claims: { role: 'parent' }
+          claims: { role: 'student' }
         };
       }
-
-      return { success: false, error: 'Login ID not found in school database. Please check your ID or contact administration.' };
-    } catch (dbErr) {
-      console.error('Firestore login query error:', dbErr);
-      return { success: false, error: 'Database authentication error: ' + dbErr.message };
     }
-  }
 
-  return { success: false, error: 'Invalid Login ID or Password.' };
-};
+    // ── 4b. STUDENT fallback → old flat students collection ───────────────
+    const studentsSnap = await getDocs(query(collection(db, 'students'), where('loginId', '==', cleanId)));
+    if (!studentsSnap.empty) {
+      const sd = studentsSnap.docs[0].data();
+      const docId = studentsSnap.docs[0].id;
+      const validPass = sd.password || sd.dob || '15082012';
+      if (validPass && cleanPass !== validPass)
+        return { success: false, error: 'Invalid Password. Your login password is your Date of Birth (DDMMYYYY).' };
+      return {
+        success: true,
+        userData: {
+          uid: docId, loginId: sd.loginId || cleanId,
+          name: sd.name || 'Student', role: 'student', uiRole: 'STUDENT',
+          classId: sd.classId || '8A', sections: [sd.classId || '8A'],
+          rollNo: sd.rollNo || sd.roll || '001', roll: sd.rollNo || sd.roll || '01',
+          active: sd.active !== false, mustChangePassword: false
+        },
+        claims: { role: 'student' }
+      };
+    }
+
+    // ── 5. PARENT → collectionGroup query on class_student.parent_number ──
+    //    Parent logs in with their 10-digit mobile number (or PAR-XXXXXXXXXX)
+    const rawPhone = cleanId.startsWith('PAR-') ? cleanId.slice(4) : cleanId;
+    if (/^\d{10}$/.test(rawPhone)) {
+      try {
+        const parentSnap = await getDocs(
+          query(collectionGroup(db, 'class_student'), where('parent_number', '==', rawPhone))
+        );
+        if (!parentSnap.empty) {
+          const pd = parentSnap.docs[0].data();
+          if (cleanPass !== rawPhone) {
+            return { success: false, error: 'Invalid Password. Your login password is your registered mobile number.' };
+          }
+          return {
+            success: true,
+            userData: {
+              uid: `par_${rawPhone}`,
+              loginId: `PAR-${rawPhone}`,
+              name: pd.parent_name || `Parent (${rawPhone})`,
+              role: 'parent', uiRole: 'PARENT',
+              classId: pd.classId || '8A',
+              phone: rawPhone,
+              studentName: pd.name,
+              active: true
+            },
+            claims: { role: 'parent' }
+          };
+        }
+        // Also try old students collection for backward compat
+        const oldParentSnap = await getDocs(
+          query(collection(db, 'students'), where('parentPhone', '==', rawPhone))
+        );
+        if (!oldParentSnap.empty) {
+          const pd = oldParentSnap.docs[0].data();
+          return {
+            success: true,
+            userData: {
+              uid: `par_${rawPhone}`, loginId: `PAR-${rawPhone}`,
+              name: pd.parentName || `Parent (${rawPhone})`,
+              role: 'parent', uiRole: 'PARENT',
+              classId: pd.classId || '8A', phone: rawPhone,
+              studentName: pd.name, active: true
+            },
+            claims: { role: 'parent' }
+          };
+        }
+      } catch (parentErr) {
+        console.warn('Parent collectionGroup query failed (index may be building):', parentErr.message);
+      }
+    }
+
+    return { success: false, error: 'Login ID not found. Please check your ID or contact administration.' };
+  } catch (dbErr) {
+    console.error('Firestore login query error:', dbErr);
+    return { success: false, error: 'Database authentication error: ' + dbErr.message };
+  }
+}
 
 export const updateUserAccountPassword = async (newPassword, currentUser = null) => {
   // If the user is logged in via Firebase Auth (e.g., Admin bootstrap)
@@ -521,18 +549,19 @@ export const listenToSchoolConfig = (callback) => {
 
 export const listenToTeachersList = (callback) => {
   if (!isFirebaseConnected || !db) return () => {};
+  // Primary: dedicated teachers flat collection (always written on addTeacher)
   return onSnapshot(col('teachers'), (snap) => {
-    const teachers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    if (teachers.length > 0) {
-      callback(teachers);
-    } else {
-      const q = query(col('users'), where('role', 'in', ['classTeacher', 'subjectTeacher', 'teacher']));
-      return onSnapshot(q, (uSnap) => {
-        callback(uSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-      });
-    }
+    const teachers = snap.docs.map(d => ({
+      id: d.id,
+      ...d.data(),
+      // Normalize field names: support both old (loginId) and new (login_id) formats
+      loginId: d.data().loginId || d.data().login_id,
+      login_id: d.data().login_id || d.data().loginId
+    }));
+    callback(teachers.length > 0 ? teachers : []);
   }, (err) => {
     console.warn('Teachers list listener error:', err.message);
+    // Fallback: users collection filtered by teacher roles
     const q = query(col('users'), where('role', 'in', ['classTeacher', 'subjectTeacher', 'teacher']));
     return onSnapshot(q, (uSnap) => {
       callback(uSnap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -542,36 +571,54 @@ export const listenToTeachersList = (callback) => {
 
 export const listenToStudentsList = (classId, callback) => {
   if (!isFirebaseConnected || !db) return () => {};
+
+  const normalizeStudent = (d, fallbackClass = classId) => ({
+    id: d.id,
+    uid: d.id,
+    classId: d.data().classId || d.data().class_id || fallbackClass,
+    ...d.data(),
+    // Normalize field names: support both old snake_case and camelCase
+    loginId: d.data().login_id || d.data().loginId || d.id,
+    login_id: d.data().login_id || d.data().loginId || d.id,
+    parentPhone: d.data().parent_number || d.data().parentPhone || '',
+    parent_number: d.data().parent_number || d.data().parentPhone || '',
+    parentName: d.data().parent_name || d.data().parentName || '',
+    parent_name: d.data().parent_name || d.data().parentName || ''
+  });
+
   if (classId && classId !== 'ALL') {
-    const classColRef = collection(db, 'classes', classId, 'students');
-    return onSnapshot(classColRef, (snap) => {
-      let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      if (list.length > 0) {
-        list.sort((a, b) => (a.rollNo || '').localeCompare(b.rollNo || ''));
-        callback(list);
+    // Primary: new class_student subcollection
+    const newSubCol = collection(db, 'classes', classId, 'class_student');
+    const unsubNew = onSnapshot(newSubCol, (snap) => {
+      const fromNew = snap.docs.map(d => normalizeStudent(d, classId))
+        .sort((a, b) => (a.rollNo || '').localeCompare(b.rollNo || ''));
+      if (fromNew.length > 0) {
+        callback(fromNew);
       } else {
+        // Fallback: flat students collection
         const simpleQ = query(col('students'), where('classId', '==', classId));
-        return onSnapshot(simpleQ, (s) => {
-          const sorted = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.rollNo || '').localeCompare(b.rollNo || ''));
-          callback(sorted);
-        });
+        getDocs(simpleQ).then((s) => {
+          callback(s.docs.map(d => normalizeStudent(d, classId))
+            .sort((a, b) => (a.rollNo || '').localeCompare(b.rollNo || '')));
+        }).catch(() => callback([]));
       }
     }, (err) => {
-      console.warn('Per-class student listener error:', err.message);
+      console.warn('class_student listener warning:', err.message);
       const simpleQ = query(col('students'), where('classId', '==', classId));
-      return onSnapshot(simpleQ, (s) => {
-        const sorted = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.rollNo || '').localeCompare(b.rollNo || ''));
-        callback(sorted);
+      onSnapshot(simpleQ, (s) => {
+        callback(s.docs.map(d => normalizeStudent(d, classId))
+          .sort((a, b) => (a.rollNo || '').localeCompare(b.rollNo || '')));
       });
     });
+    return unsubNew;
   } else {
+    // ALL classes: listen to flat students collection (used by admin)
     const q = query(col('students'), orderBy('rollNo', 'asc'));
     return onSnapshot(q, (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      callback(list);
-    }, (err) => {
+      callback(snap.docs.map(d => normalizeStudent(d, '10A')));
+    }, () => {
       return onSnapshot(col('students'), (s) => {
-        callback(s.docs.map(d => ({ id: d.id, ...d.data() })));
+        callback(s.docs.map(d => normalizeStudent(d, '10A')));
       });
     });
   }
@@ -647,7 +694,19 @@ export const syncNotesToCloud = async (note) => {
   if (!isFirebaseConnected || !db) return { success: false, mode: 'local' };
   try {
     const id = note.id || `cn_${Date.now()}`;
-    await setDoc(docRef('classNotes', id), { ...note, createdAt: serverTimestamp() }, { merge: true });
+    const sanitizedNote = {};
+    Object.keys(note).forEach((key) => {
+      const val = note[key];
+      if (val !== undefined && val !== null) {
+        if (key === 'fileData' && typeof val === 'string' && val.length > 300000) {
+          // Exclude huge base64 data to avoid 1MB document limit error
+          return;
+        }
+        sanitizedNote[key] = val;
+      }
+    });
+
+    await setDoc(docRef('classNotes', id), { ...sanitizedNote, createdAt: serverTimestamp() }, { merge: true });
     return { success: true, id };
   } catch (e) { console.error('Note sync:', e); return { success: false, error: e.message }; }
 };

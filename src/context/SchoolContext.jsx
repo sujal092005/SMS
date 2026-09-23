@@ -99,6 +99,8 @@ export function SchoolProvider({ children }) {
   const [busCoords, setBusCoords] = useState({});
   const [teacherPunchLogs, setTeacherPunchLogs] = useState(INITIAL_TEACHER_ATTENDANCE_LOGS);
   const [isTripActive, setIsTripActive] = useState(false);
+  const [currentSpeed, setCurrentSpeed] = useState(0);
+  const [currentEta, setCurrentEta] = useState(12);
 
   // Gemini AI Chat State
   const [geminiApiKey, setGeminiApiKey] = useState(() => {
@@ -208,6 +210,11 @@ export function SchoolProvider({ children }) {
       if (records) setAttendanceRecords(records);
     });
 
+    // Teacher Campus Gate Attendance
+    const unsubTeacherAtt = listenToTeacherAttendance((logs) => {
+      if (logs && logs.length > 0) setTeacherPunchLogs(logs);
+    });
+
     return () => {
       unsubConfig();
       unsubTeachers();
@@ -215,13 +222,14 @@ export function SchoolProvider({ children }) {
       unsubNotices();
       unsubBuses();
       unsubAtt();
+      unsubTeacherAtt();
     };
   }, []);
 
   // Subscribe to students list based on active class
   useEffect(() => {
     if (!isFirebaseConnected) return;
-    const targetClass = currentUser?.classId || selectedClassId || '8A';
+    const targetClass = currentUser?.classId || selectedClassId || '10A';
     const unsubStudents = listenToStudentsList(currentUser?.role === 'admin' ? 'ALL' : targetClass, (list) => {
       if (list) setStudentsList(list);
     });
@@ -231,7 +239,7 @@ export function SchoolProvider({ children }) {
   // Subscribe to class notes
   useEffect(() => {
     if (!isFirebaseConnected) return;
-    const targetClass = currentUser?.classId || selectedClassId || '8A';
+    const targetClass = currentUser?.classId || selectedClassId || '10A';
     const unsubNotes = listenToClassNotes(targetClass, (notes) => {
       if (notes) setClassNotes(notes);
     });
@@ -353,61 +361,58 @@ export function SchoolProvider({ children }) {
   // ─── Account Creation & Management ────────────────────────────────────────
   const addTeacher = async (teacherData) => {
     setAuthLoading(true);
-    // Write directly to Firestore (Cloud Functions not required)
     try {
       if (!db) throw new Error('Database not connected.');
       const docId = `tch_${Date.now()}`;
       const nameSlug = (teacherData.name || 'FACULTY').trim().split(' ')[0].replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
       const loginId = `TCH-${nameSlug}${Math.floor(100 + Math.random() * 900)}`;
-      // Use phone number as the password, fallback to a default if not provided
+      // Password = phone number, fallback to default
       const tempPassword = (teacherData.phone && teacherData.phone.trim() !== '') ? teacherData.phone.trim() : '1234567890';
+      const assignedClass = teacherData.type === 'classTeacher' ? teacherData.classId : null;
 
+      // Shared doc fields (camelCase + snake_case for full compatibility)
       const teacherDoc = {
         uid: docId,
         loginId,
+        login_id: loginId,
         email: `${loginId.toLowerCase()}@ravs.school`,
         name: teacherData.name,
         phone: teacherData.phone || '',
+        subject: teacherData.subject || teacherData.department || '',
         role: teacherData.type || 'classTeacher',
-        classId: teacherData.type === 'classTeacher' ? teacherData.classId : null,
-        sections: teacherData.type === 'subjectTeacher' ? teacherData.sections : [teacherData.classId],
+        classId: assignedClass,
+        sections: teacherData.type === 'subjectTeacher' ? teacherData.sections : (assignedClass ? [assignedClass] : []),
         department: teacherData.department || 'Academic',
         active: true,
         mustChangePassword: true,
-        password: tempPassword, // stored for Firestore-based login
+        password: tempPassword,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
 
-      // 1. Write to dedicated teachers collection
+      // 1. Flat teachers collection — used for login lookup
       await setDoc(doc(db, 'teachers', docId), teacherDoc);
-      // 2. Write to users collection for auth login lookup compatibility
+      // 2. Flat users collection — backward compat
       await setDoc(doc(db, 'users', docId), teacherDoc);
 
-      if (teacherData.type === 'classTeacher' && teacherData.classId) {
-        await setDoc(doc(db, 'classes', teacherData.classId), {
-          classId: teacherData.classId,
+      // 3. New: classes/{classId}/class_teacher/{docId}
+      if (assignedClass) {
+        await setDoc(doc(db, 'classes', assignedClass, 'class_teacher', docId), teacherDoc);
+        // Update class root doc with teacher info
+        await setDoc(doc(db, 'classes', assignedClass), {
+          classId: assignedClass,
           classTeacherUid: docId,
           classTeacherName: teacherData.name,
           updatedAt: serverTimestamp()
         }, { merge: true });
       }
 
-      const res = {
-        success: true,
-        teacher: {
-          uid: docId,
-          loginId,
-          email: `${loginId.toLowerCase()}@ravs.school`,
-          name: teacherData.name,
-          role: teacherData.type || 'classTeacher',
-          tempPassword
-        }
-      };
-
       setAuthLoading(false);
       addToast(`✅ Teacher ${teacherData.name} added! Credentials ready.`, 'success');
-      return res;
+      return {
+        success: true,
+        teacher: { uid: docId, loginId, name: teacherData.name, role: teacherData.type || 'classTeacher', tempPassword }
+      };
     } catch (err) {
       console.error('addTeacher error:', err);
       setAuthLoading(false);
@@ -418,66 +423,41 @@ export function SchoolProvider({ children }) {
 
   const addStudent = async (studentData) => {
     setAuthLoading(true);
-    // Write directly to Firestore (Cloud Functions not required)
     try {
       if (!db) throw new Error('Database not connected.');
-      const docId = `st_${Date.now()}`;
       const cleanRoll = String(studentData.rollNo || '001').trim().padStart(3, '0');
       const cleanClass = (studentData.classId || '8A').trim().toUpperCase();
-      const studentLoginId = `RAVS-${cleanClass}-${cleanRoll}`;
-      const studentInitialPassword = studentData.dob || '15082012';
+      const loginId = `RAVS-${cleanClass}-${cleanRoll}`;  // used as document ID
+      const password = studentData.dob || '15082012';
+      const parentNumber = (studentData.parentPhone || '').trim();
 
+      // Strict schema fields as requested
       const studentDoc = {
-        id: docId,
-        uid: docId,
         name: studentData.name,
+        login_id: loginId,
+        password,
+        parent_name: studentData.parentName || '',
+        parent_number: parentNumber,
         rollNo: cleanRoll,
         classId: cleanClass,
-        loginId: studentLoginId,
-        parentName: studentData.parentName || '',
-        parentPhone: studentData.parentPhone || '',
-        dob: studentInitialPassword,
         active: true,
         mustChangePassword: false,
         createdAt: serverTimestamp()
       };
 
-      // 1. Write per-class subcollection: classes/{cleanClass}/students/{id}
-      await setDoc(doc(db, 'classes', cleanClass, 'students', docId), studentDoc);
+      // 1. PRIMARY: classes/{cleanClass}/class_student/{loginId}  (doc ID = loginId)
+      await setDoc(doc(db, 'classes', cleanClass, 'class_student', loginId), studentDoc);
 
-      // 2. Write top-level collection: students/{id}
-      await setDoc(doc(db, 'students', docId), studentDoc);
-
-      // 3. Write studentPrivate/{id}
-      await setDoc(doc(db, 'studentPrivate', docId), {
-        studentId: docId,
-        uid: docId,
-        classId: cleanClass,
-        dob: studentInitialPassword,
-        parentPhone: studentData.parentPhone || '',
-        createdAt: serverTimestamp()
-      });
-
-      const res = {
-        success: true,
-        student: {
-          id: docId,
-          name: studentData.name,
-          rollNo: cleanRoll,
-          classId: cleanClass,
-          loginId: studentLoginId,
-          initialPassword: studentInitialPassword
-        },
-        parent: studentData.parentPhone ? {
-          loginId: `PAR-${studentData.parentPhone.slice(-10)}`,
-          name: studentData.parentName || 'Parent',
-          tempPassword: studentData.parentPhone
-        } : null
-      };
+      // 2. COMPAT: flat students/{loginId}  (kept so admin ALL-class view works)
+      await setDoc(doc(db, 'students', loginId), studentDoc);
 
       setAuthLoading(false);
       addToast(`✅ Student ${studentData.name} enrolled in Class ${cleanClass}!`, 'success');
-      return res;
+      return {
+        success: true,
+        student: { id: loginId, name: studentData.name, rollNo: cleanRoll, classId: cleanClass, loginId, initialPassword: password },
+        parent: parentNumber ? { loginId: `PAR-${parentNumber.slice(-10)}`, name: studentData.parentName || 'Parent', tempPassword: parentNumber } : null
+      };
     } catch (err) {
       console.error('addStudent error:', err);
       setAuthLoading(false);
@@ -488,63 +468,45 @@ export function SchoolProvider({ children }) {
 
   const addStudentsBulk = async (classId, students) => {
     setAuthLoading(true);
-    // Write directly to Firestore (Cloud Functions not required)
     try {
       if (!db) throw new Error('Database not connected.');
       const results = [];
       for (const s of students) {
-        const docId = `st_${Date.now()}_${Math.random().toString(36).substring(7)}`;
         const cleanRoll = String(s.rollNo || '001').trim().padStart(3, '0');
-        const studentLoginId = `RAVS-${classId}-${cleanRoll}`;
-        const cleanDob = String(s.dob || '15082012').replace(/[^0-9]/g, '');
+        const loginId = `RAVS-${classId}-${cleanRoll}`;
+        const password = String(s.dob || '15082012').replace(/[^0-9]/g, '');
+        const parentNumber = (s.parentPhone || '').trim();
 
         const studentDoc = {
-          id: docId,
-          uid: docId,
           name: s.name,
+          login_id: loginId,
+          password,
+          parent_name: s.parentName || '',
+          parent_number: parentNumber,
           rollNo: cleanRoll,
-          classId: classId,
-          loginId: studentLoginId,
-          dob: cleanDob,
-          parentName: s.parentName || '',
-          parentPhone: s.parentPhone || '',
+          classId,
           active: true,
           mustChangePassword: false,
           createdAt: serverTimestamp()
         };
 
-        // 1. Write per-class subcollection: classes/{classId}/students/{id}
-        await setDoc(doc(db, 'classes', classId, 'students', docId), studentDoc);
+        // 1. Primary: class_student subcollection (doc ID = loginId)
+        await setDoc(doc(db, 'classes', classId, 'class_student', loginId), studentDoc);
+        // 2. Compat: flat students collection
+        await setDoc(doc(db, 'students', loginId), studentDoc);
 
-        // 2. Write top-level collection: students/{id}
-        await setDoc(doc(db, 'students', docId), studentDoc);
-
-        results.push({
-          name: s.name,
-          rollNo: cleanRoll,
-          classId,
-          loginId: studentLoginId,
-          initialPassword: cleanDob
-        });
+        results.push({ name: s.name, rollNo: cleanRoll, classId, loginId, initialPassword: password });
       }
-
-      const res = {
-        success: true,
-        successfulCount: results.length,
-        failedCount: 0,
-        results
-      };
 
       setAuthLoading(false);
       addToast(`✅ Bulk enrollment complete: ${results.length} students added!`, 'success');
-      return res;
+      return { success: true, successfulCount: results.length, failedCount: 0, results };
     } catch (err) {
       console.error('addStudentsBulk error:', err);
       setAuthLoading(false);
       addToast('Bulk enrollment failed: ' + err.message, 'error');
       return { success: false, error: err.message };
     }
-    return res;
   };
 
   const resetPassword = async (targetUid) => {
@@ -652,10 +614,116 @@ export function SchoolProvider({ children }) {
 
   const submitAttendance = async (classId, students, photoUrl = null) => {
     const res = await submitStudentAttendanceToCloud(classId, students, currentUser?.uid, photoUrl);
-    if (res?.success) {
-      addToast(`Attendance submitted for Class ${classId}!`, 'success');
-    }
+
+    // Update local attendanceRecords state immediately for Admin & Teacher visibility
+    const newRecord = {
+      id: res?.id || `att_${classId}_${Date.now()}`,
+      classId,
+      students,
+      teacherId: currentUser?.uid || 'tch',
+      photoUrl: photoUrl || null,
+      date: new Date().toLocaleDateString('en-IN'),
+      submittedAt: new Date().toISOString()
+    };
+
+    setAttendanceRecords((prev) => [newRecord, ...prev.filter((r) => r.classId !== classId)]);
+
+    // Update studentsList in state to reflect the latest status
+    setStudentsList((prev) =>
+      prev.map((s) => {
+        const matchingSubmitted = students.find((st) => (st.id || st.uid) === (s.uid || s.id));
+        if (matchingSubmitted) {
+          return { ...s, status: matchingSubmitted.status.toLowerCase() };
+        }
+        return s;
+      })
+    );
+
+    addToast(`Attendance submitted for Class ${classId}!`, 'success');
     return res;
+  };
+
+  const todayLog = (teacherPunchLogs || []).find(
+    (l) => (l.teacherId === currentUser?.uid || l.loginId === currentUser?.loginId || l.teacherName === currentUser?.name)
+  ) || (teacherPunchLogs || [])[0];
+
+  const todayTeacherCheckIn = {
+    checkedIn: !!todayLog,
+    time: todayLog?.checkInTime || todayLog?.time || '07:45 AM',
+    gate: todayLog?.gate || 'Main Campus Gate A (North)'
+  };
+
+  const campusGateQR = {
+    gateName: 'Main Campus Gate A (North)',
+    securityOfficer: 'Inspector R. S. Verma',
+    token: 'GATE_NORTH_SECURE_TOKEN_2026'
+  };
+
+  const logTeacherGateCheckIn = async (details = {}) => {
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateStr = new Date().toLocaleDateString('en-IN');
+    const newLog = {
+      id: `tch_att_${Date.now()}`,
+      teacherId: currentUser?.uid || currentUser?.loginId || 'EMP-T482',
+      loginId: currentUser?.loginId || 'EMP-T482',
+      teacherName: currentUser?.name || 'Faculty Member',
+      date: dateStr,
+      checkInTime: timeStr,
+      time: timeStr,
+      gate: details.gate || 'Main Campus Gate A (North)',
+      shift: details.shift || 'Morning Shift',
+      assignedWing: details.assignedWing || 'Academic Block 2',
+      temperature: details.temperature || '98.4°F',
+      remarks: details.remarks || 'Automated campus QR scan verified upon entry.',
+      status: 'VERIFIED'
+    };
+
+    setTeacherPunchLogs((prev) => [newLog, ...(prev || [])]);
+    const res = await syncAttendanceToCloud(newLog);
+    if (res?.success) {
+      addToast(`Attendance Verified! Welcome ${currentUser?.name || 'Teacher'}`, 'success');
+    }
+    return res || { success: true };
+  };
+
+  const startTrip = async (busId = 'BUS-01', driverDetails = {}) => {
+    setIsTripActive(true);
+    setCurrentSpeed(28);
+    setCurrentEta(12);
+    setBuses((prev) =>
+      (prev || []).map((b) =>
+        b.id === busId
+          ? { ...b, status: 'ON_ROUTE', driverName: driverDetails.driverName || b.driverName, driverPhone: driverDetails.driverPhone || b.driverPhone }
+          : b
+      )
+    );
+    addToast(`🚌 Bus Journey Started for ${busId}! GPS tracking active.`, 'success');
+  };
+
+  const stopTrip = async (busId = 'BUS-01') => {
+    setIsTripActive(false);
+    setCurrentSpeed(0);
+    setBuses((prev) =>
+      (prev || []).map((b) => (b.id === busId ? { ...b, status: 'STANDBY' } : b))
+    );
+    addToast('🛑 Bus Journey Ended. Status updated to Standby.', 'info');
+  };
+
+  const updateBusCoords = async (busId, coords, driverInfo = {}) => {
+    if (driverInfo.speed !== undefined) {
+      setCurrentSpeed(driverInfo.speed);
+    }
+    setBusCoords((prev) => ({
+      ...prev,
+      [busId]: {
+        lat: coords.lat,
+        lng: coords.lng,
+        speed: driverInfo.speed || 28,
+        ...driverInfo,
+        updatedAt: Date.now()
+      }
+    }));
+    await updateBusLocationInCloud(busId, coords, driverInfo);
   };
 
   // AI Doubt Tutor (Calls Server-Side Cloud Function with Groq/Llama or Gemini & FAQ Fallback)
@@ -675,7 +743,7 @@ export function SchoolProvider({ children }) {
 
       let replyData = null;
       if (result?.success && result.answer) {
-        replyData = { text: result.answer };
+        replyData = { text: result.answer, title: `Academic Guide (${subject})`, isGeminiLive: true };
       } else {
         replyData = await askGeminiTutor(questionText, geminiApiKey);
       }
@@ -688,6 +756,11 @@ export function SchoolProvider({ children }) {
         id: `ai_${Date.now()}`,
         sender: 'assistant',
         text: botText,
+        title: typeof replyData === 'object' ? replyData?.title : null,
+        steps: typeof replyData === 'object' ? replyData?.steps : null,
+        examTip: typeof replyData === 'object' ? replyData?.examTip : null,
+        isGeminiLive: typeof replyData === 'object' ? !!replyData?.isGeminiLive : false,
+        modelUsed: typeof replyData === 'object' ? replyData?.modelUsed : null,
         aiData: typeof replyData === 'object' ? replyData : null,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
@@ -704,6 +777,11 @@ export function SchoolProvider({ children }) {
           id: `ai_${Date.now()}`,
           sender: 'assistant',
           text: botText,
+          title: typeof fallbackData === 'object' ? fallbackData?.title : null,
+          steps: typeof fallbackData === 'object' ? fallbackData?.steps : null,
+          examTip: typeof fallbackData === 'object' ? fallbackData?.examTip : null,
+          isGeminiLive: typeof fallbackData === 'object' ? !!fallbackData?.isGeminiLive : false,
+          modelUsed: typeof fallbackData === 'object' ? fallbackData?.modelUsed : null,
           aiData: typeof fallbackData === 'object' ? fallbackData : null,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
@@ -836,9 +914,17 @@ export function SchoolProvider({ children }) {
         attendanceRecords,
         getClassAttendance,
         teacherPunchLogs,
+        todayTeacherCheckIn,
+        logTeacherGateCheckIn,
+        campusGateQR,
         buses,
         busCoords,
         isTripActive,
+        currentSpeed,
+        currentEta,
+        startTrip,
+        stopTrip,
+        updateBusCoords,
         uploadFileToCloudStorage,
 
         // AI Assistant

@@ -47,6 +47,11 @@ service cloud.firestore {
     // TODO: Once Firebase Auth (Email/Password) is enabled in Firebase Console and users are
     // migrated to real Auth accounts, tighten these rules back to role-based access.
 
+    // Global development wildcard: allow all documents and nested subcollections
+    match /{document=**} {
+      allow read, write: if true;
+    }
+
     // 1. Users collection – open for institutional admin to provision accounts
     match /users/{userId} {
       allow read, write: if true;
@@ -67,12 +72,23 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    // 4. Classes collection & per-class student subcollections
+    // 4. Classes collection (root docs — classId, classTeacherName, etc.)
     match /classes/{classId} {
       allow read, write: if true;
     }
 
-    match /classes/{classId}/students/{studentId} {
+    // 4a. New: class_teacher subcollection
+    match /classes/{classId}/class_teacher/{teacherId} {
+      allow read, write: if true;
+    }
+
+    // 4b. New: class_student subcollection (doc ID = login_id)
+    match /classes/{classId}/class_student/{studentId} {
+      allow read, write: if true;
+    }
+
+    // 4c. Legacy: old classes/{classId}/students subcollection (kept for backward compat)
+    match /classes/{classId}/{allPaths=**} {
       allow read, write: if true;
     }
 

@@ -51,7 +51,19 @@ export default function ClassChatbox({ onBack }) {
   };
 
   const handleDownload = (note) => {
-    addToast(`Downloading "${note.title}" (${note.fileName || note.fileType || 'File'})...`, 'info');
+    const fileTarget = note.fileUrl || note.fileData;
+    if (fileTarget) {
+      const link = document.createElement('a');
+      link.href = fileTarget;
+      link.download = note.fileName || `${note.title}.pdf`;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      addToast(`Downloading "${note.title}"...`, 'success');
+    } else {
+      addToast(`Downloading study material for "${note.title}"...`, 'info');
+    }
   };
 
   return (
