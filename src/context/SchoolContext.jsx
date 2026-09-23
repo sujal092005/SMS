@@ -561,12 +561,23 @@ export function SchoolProvider({ children }) {
       time: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
       createdAt: new Date().toISOString()
     };
+
+    // Optimistic local update - always succeeds immediately
     setClassNotes((prev) => [newNote, ...prev]);
-    const res = await syncNotesToCloud(newNote);
-    if (res?.success) {
-      addToast('Class notes uploaded to student hub!', 'success');
+
+    // Asynchronously sync to cloud without blocking UI
+    try {
+      const result = await syncNotesToCloud(newNote);
+      if (result?.success) {
+        console.log('Note synced to cloud:', result.id);
+      } else {
+        console.warn('Note saved locally only:', result?.error || 'Cloud sync unavailable');
+      }
+    } catch (e) {
+      console.warn('Non-blocking note sync error:', e.message);
     }
-    return res;
+
+    return { success: true, id: newNote.id };
   };
 
   const sendFacultyMessage = async (messageText) => {

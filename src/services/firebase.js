@@ -640,12 +640,13 @@ export const uploadFileToCloudStorage = async (file, pathPrefix = 'class_notes')
   try {
     const fileId = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const fileRef = storageRef(storage, `${pathPrefix}/${fileId}`);
+
     const snapshot = await uploadBytes(fileRef, file);
     const downloadUrl = await getDownloadURL(snapshot.ref);
     return { success: true, url: downloadUrl, fullPath: snapshot.ref.fullPath };
   } catch (err) {
     console.error('File upload error:', err);
-    return { success: false, error: err.message };
+    return { success: false, error: err.message, mode: 'local' };
   }
 };
 
@@ -698,8 +699,12 @@ export const syncNotesToCloud = async (note) => {
     Object.keys(note).forEach((key) => {
       const val = note[key];
       if (val !== undefined && val !== null) {
-        if (key === 'fileData' && typeof val === 'string' && val.length > 300000) {
-          // Exclude huge base64 data to avoid 1MB document limit error
+        // Exclude huge base64 data and blob URLs to avoid 1MB Firestore document limit
+        if (key === 'fileData' && typeof val === 'string' && (val.length > 300000 || val.startsWith('blob:'))) {
+          return;
+        }
+        // Skip blob: URLs for fileUrl — only store cloud storage URLs
+        if (key === 'fileUrl' && typeof val === 'string' && val.startsWith('blob:')) {
           return;
         }
         sanitizedNote[key] = val;

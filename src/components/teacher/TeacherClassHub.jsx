@@ -131,51 +131,74 @@ export default function TeacherClassHub({ onBack }) {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const [isPublishing, setIsPublishing] = useState(false);
+
   const handleUploadSubmit = async (e) => {
     e.preventDefault();
+    if (isPublishing) return;
+
     if (!title.trim() && !selectedFile) {
       addToast('Please enter a note title or attach a file', 'error');
       return;
     }
 
-    let storageDownloadUrl = null;
-    if (selectedFile) {
-      try {
-        const uploadRes = await uploadFileToCloudStorage(selectedFile, 'class_notes');
-        if (uploadRes?.success) {
-          storageDownloadUrl = uploadRes.url;
+    setIsPublishing(true);
+
+    try {
+      let storageDownloadUrl = null;
+
+      // Upload file to Firebase Storage (no timeout - let it finish)
+      if (selectedFile) {
+        try {
+          const uploadRes = await uploadFileToCloudStorage(selectedFile, 'class_notes');
+          if (uploadRes?.success && uploadRes.url) {
+            storageDownloadUrl = uploadRes.url;
+          } else {
+            console.warn('Storage upload returned non-success:', uploadRes?.error || 'Unknown');
+          }
+        } catch (err) {
+          console.warn('Storage upload error (falling back to local):', err.message);
         }
-      } catch (err) {
-        console.warn('Storage upload fallback:', err);
       }
+
+      const matchedClass = availableClasses.find((c) => (c.id || c.classId) === targetClassId);
+      const targetClassName = matchedClass ? (matchedClass.label || matchedClass.className) : (targetClassId === 'ALL' ? 'All Classes (School-Wide)' : `Class ${targetClassId}`);
+
+      // Use cloud URL if available, else use local blob URL for instant preview
+      const finalUrl = storageDownloadUrl || fileBlobUrl || null;
+
+      await uploadClassNote({
+        subject: subject || 'General Academic',
+        title: title.trim() || fileName || 'Class Handout',
+        chapter: chapter.trim() || '',
+        summary: summary.trim() || `Study notes published for ${targetClassName}.`,
+        fileType: fileType || 'PDF',
+        fileName: fileName || 'Class_Notes.pdf',
+        fileSize: fileSize || '1.4 MB',
+        fileUrl: finalUrl,
+        fileData: filePreview || null,
+        targetClassId: targetClassId || 'ALL',
+        targetClassName: targetClassName || 'All Classes'
+      });
+
+      addToast(
+        storageDownloadUrl
+          ? `Published "${title || fileName}" for ${targetClassName} (Cloud ☁️)`
+          : `Published "${title || fileName}" for ${targetClassName} (Local 💾)`,
+        'success'
+      );
+
+      // Reset fields
+      setTitle('');
+      setChapter('');
+      setSummary('');
+      handleRemoveAttachedFile();
+    } catch (err) {
+      console.error('Publish note error:', err);
+      addToast('Failed to publish note. Please try again.', 'error');
+    } finally {
+      setIsPublishing(false);
     }
-
-    const matchedClass = availableClasses.find((c) => (c.id || c.classId) === targetClassId);
-    const targetClassName = matchedClass ? (matchedClass.label || matchedClass.className) : (targetClassId === 'ALL' ? 'All Classes (School-Wide)' : `Class ${targetClassId}`);
-
-    const finalUrl = storageDownloadUrl || fileBlobUrl || null;
-
-    uploadClassNote({
-      subject: subject || 'General Academic',
-      title: title.trim() || fileName || 'Class Handout',
-      chapter: chapter.trim() || '',
-      summary: summary.trim() || `Study notes published for ${targetClassName}.`,
-      fileType: fileType || 'PDF',
-      fileName: fileName || 'Class_Notes.pdf',
-      fileSize: fileSize || '1.4 MB',
-      fileUrl: finalUrl,
-      fileData: filePreview || null,
-      targetClassId: targetClassId || 'ALL',
-      targetClassName: targetClassName || 'All Classes'
-    });
-
-    addToast(`Published note "${title || fileName}" for ${targetClassName}!`, 'success');
-
-    // Reset fields
-    setTitle('');
-    setChapter('');
-    setSummary('');
-    handleRemoveAttachedFile();
   };
 
   const handleSendTeacherMessage = (e) => {
@@ -453,10 +476,15 @@ export default function TeacherClassHub({ onBack }) {
 
               <button
                 type="submit"
-                className="w-full py-3 rounded-2xl bg-amber-600 hover:bg-amber-700 active:scale-98 text-white font-extrabold text-xs shadow-md shadow-amber-600/20 transition-all flex items-center justify-center gap-2"
+                disabled={isPublishing}
+                className={`w-full py-3 rounded-2xl font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2 ${
+                  isPublishing
+                    ? 'bg-amber-400 text-white cursor-not-allowed opacity-90'
+                    : 'bg-amber-600 hover:bg-amber-700 active:scale-98 text-white shadow-amber-600/20'
+                }`}
               >
-                <UploadCloud className="w-4 h-4" />
-                <span>Publish Notes & File to Classroom</span>
+                <UploadCloud className={`w-4 h-4 ${isPublishing ? 'animate-bounce' : ''}`} />
+                <span>{isPublishing ? 'Publishing Notes & Syncing...' : 'Publish Notes & File to Classroom'}</span>
               </button>
             </form>
 
