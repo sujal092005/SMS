@@ -51,6 +51,11 @@ import {
   uploadFileToCloudStorage,
   getBackendStatus
 } from '../services/firebase';
+import {
+  saveNoteFileToStorage,
+  getNoteFileFromStorage,
+  downloadNoteMaterial
+} from '../services/localFileStorage';
 import { askGeminiTutor } from '../services/gemini';
 
 const SchoolContext = createContext();
@@ -236,15 +241,18 @@ export function SchoolProvider({ children }) {
     return () => unsubStudents();
   }, [currentUser?.classId, currentUser?.role, selectedClassId]);
 
-  // Subscribe to class notes
+  // Subscribe to class notes (realtime cloud sync)
   useEffect(() => {
     if (!isFirebaseConnected) return;
-    const targetClass = currentUser?.classId || selectedClassId || '10A';
+    const isTeacherOrAdmin = activeRole === 'ADMIN' || activeRole === 'TEACHER';
+    const targetClass = isTeacherOrAdmin ? 'ALL' : (currentUser?.classId || selectedClassId || '10A');
     const unsubNotes = listenToClassNotes(targetClass, (notes) => {
-      if (notes) setClassNotes(notes);
+      if (notes && notes.length > 0) {
+        setClassNotes(notes);
+      }
     });
     return () => unsubNotes();
-  }, [currentUser?.classId, selectedClassId]);
+  }, [currentUser?.classId, selectedClassId, activeRole]);
 
   // Subscribe to faculty chat
   useEffect(() => {
@@ -550,9 +558,10 @@ export function SchoolProvider({ children }) {
     addToast('Notice deleted.', 'info');
   };
 
-  const uploadClassNote = async (noteData) => {
+  const uploadClassNote = async (noteData, rawFile = null) => {
+    const noteId = noteData.id || `cn_${Date.now()}`;
     const newNote = {
-      id: `cn_${Date.now()}`,
+      id: noteId,
       ...noteData,
       teacher: currentUser?.name || noteData.teacherName || 'Faculty',
       teacherName: currentUser?.name || noteData.teacherName || 'Faculty',
@@ -562,8 +571,22 @@ export function SchoolProvider({ children }) {
       createdAt: new Date().toISOString()
     };
 
+    // Store raw file in local browser storage (IndexedDB) for instant offline & high-res download
+    if (rawFile) {
+      try {
+        await saveNoteFileToStorage(noteId, rawFile, {
+          title: newNote.title,
+          fileName: newNote.fileName,
+          fileType: newNote.fileType,
+          fileSize: newNote.fileSize
+        });
+      } catch (err) {
+        console.warn('Local file storage non-critical error:', err);
+      }
+    }
+
     // Optimistic local update - always succeeds immediately
-    setClassNotes((prev) => [newNote, ...prev]);
+    setClassNotes((prev) => [newNote, ...prev.filter(n => n.id !== noteId)]);
 
     // Asynchronously sync to cloud without blocking UI
     try {
@@ -914,6 +937,8 @@ export function SchoolProvider({ children }) {
         deleteNotice,
         classNotes,
         uploadClassNote,
+        downloadNoteMaterial,
+        getNoteFileFromStorage,
         facultyChats,
         sendFacultyMessage,
         sendFacultyChat: sendFacultyMessage, // alias for AdminChat & TeacherFacultyChat

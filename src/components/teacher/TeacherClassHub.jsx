@@ -29,6 +29,7 @@ export default function TeacherClassHub({ onBack }) {
     classesList,
     classNotes,
     uploadClassNote,
+    downloadNoteMaterial,
     classChats,
     sendClassTeacherMessage,
     uploadFileToCloudStorage,
@@ -89,6 +90,8 @@ export default function TeacherClassHub({ onBack }) {
       determinedType = 'PDF';
     } else if (file.type.includes('word') || file.name.endsWith('.docx') || file.name.endsWith('.doc')) {
       determinedType = 'DOCX';
+    } else if (file.type.includes('sheet') || file.name.endsWith('.xlsx') || file.name.endsWith('.csv')) {
+      determinedType = 'SPREADSHEET';
     } else {
       determinedType = 'DOCUMENT';
     }
@@ -102,8 +105,8 @@ export default function TeacherClassHub({ onBack }) {
       console.warn('Blob URL error:', e);
     }
 
-    // Generate base64 preview only for small image files (<500KB)
-    if (file.type.startsWith('image/') && file.size < 500000) {
+    // Read as Data URL for files <= 700KB (embeds directly in database document)
+    if (file.size <= 700000) {
       const reader = new FileReader();
       reader.onloadend = () => {
         setFilePreview(reader.result);
@@ -146,49 +149,61 @@ export default function TeacherClassHub({ onBack }) {
 
     try {
       let storageDownloadUrl = null;
+      let finalFileData = filePreview;
 
-      // Upload file to Firebase Storage (no timeout - let it finish)
+      // If file is present and not yet converted to data URL (and <= 700KB), read it synchronously
+      if (selectedFile && !finalFileData && selectedFile.size <= 700000) {
+        try {
+          finalFileData = await new Promise((resolve) => {
+            const r = new FileReader();
+            r.onloadend = () => resolve(r.result);
+            r.onerror = () => resolve(null);
+            r.readAsDataURL(selectedFile);
+          });
+        } catch (rErr) {
+          console.warn('Data URL read error:', rErr);
+        }
+      }
+
+      // Upload file to Firebase Storage (with 3-sec non-blocking timeout)
       if (selectedFile) {
         try {
           const uploadRes = await uploadFileToCloudStorage(selectedFile, 'class_notes');
           if (uploadRes?.success && uploadRes.url) {
             storageDownloadUrl = uploadRes.url;
-          } else {
-            console.warn('Storage upload returned non-success:', uploadRes?.error || 'Unknown');
           }
         } catch (err) {
-          console.warn('Storage upload error (falling back to local):', err.message);
+          console.warn('Storage upload error:', err.message);
         }
       }
 
       const matchedClass = availableClasses.find((c) => (c.id || c.classId) === targetClassId);
-      const targetClassName = matchedClass ? (matchedClass.label || matchedClass.className) : (targetClassId === 'ALL' ? 'All Classes (School-Wide)' : `Class ${targetClassId}`);
+      const targetClassName = matchedClass
+        ? (matchedClass.label || matchedClass.className)
+        : (targetClassId === 'ALL' ? 'All Classes (School-Wide)' : `Class ${targetClassId}`);
 
-      // Use cloud URL if available, else use local blob URL for instant preview
-      const finalUrl = storageDownloadUrl || fileBlobUrl || null;
-
-      await uploadClassNote({
+      const notePayload = {
         subject: subject || 'General Academic',
         title: title.trim() || fileName || 'Class Handout',
         chapter: chapter.trim() || '',
         summary: summary.trim() || `Study notes published for ${targetClassName}.`,
         fileType: fileType || 'PDF',
-        fileName: fileName || 'Class_Notes.pdf',
+        fileName: fileName || (selectedFile ? selectedFile.name : 'Class_Notes.pdf'),
         fileSize: fileSize || '1.4 MB',
-        fileUrl: finalUrl,
-        fileData: filePreview || null,
+        fileUrl: storageDownloadUrl || null,
+        fileData: finalFileData || null,
         targetClassId: targetClassId || 'ALL',
         targetClassName: targetClassName || 'All Classes'
-      });
+      };
+
+      await uploadClassNote(notePayload, selectedFile);
 
       addToast(
-        storageDownloadUrl
-          ? `Published "${title || fileName}" for ${targetClassName} (Cloud ☁️)`
-          : `Published "${title || fileName}" for ${targetClassName} (Local 💾)`,
+        `Published "${title || fileName || 'Study Note'}" for ${targetClassName} successfully!`,
         'success'
       );
 
-      // Reset fields
+      // Reset form fields
       setTitle('');
       setChapter('');
       setSummary('');
@@ -557,19 +572,15 @@ export default function TeacherClassHub({ onBack }) {
                       {note.summary}
                     </p>
 
-                    {/* Download Attachment Action */}
-                    {(note.fileUrl || note.fileData) && (
-                      <a
-                        href={note.fileUrl || note.fileData}
-                        download={note.fileName || `${note.title}.pdf`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold transition-all w-fit"
-                      >
-                        <Download className="w-3.5 h-3.5 text-amber-700" />
-                        <span>Download {note.fileName || 'Attachment'} ({note.fileSize || 'Document'})</span>
-                      </a>
-                    )}
+                    {/* Download / Open Attachment Action */}
+                    <button
+                      type="button"
+                      onClick={() => downloadNoteMaterial(note)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold transition-all w-fit cursor-pointer active:scale-95"
+                    >
+                      <Download className="w-3.5 h-3.5 text-amber-700" />
+                      <span>Download {note.fileName || 'Material'} ({note.fileSize || note.fileType || 'Document'})</span>
+                    </button>
 
                     <div className="flex items-center justify-between text-[10.5px] text-slate-400 border-t border-slate-200/60 pt-2">
                       <span>By {note.teacher} • {note.time}</span>

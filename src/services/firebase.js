@@ -641,11 +641,20 @@ export const uploadFileToCloudStorage = async (file, pathPrefix = 'class_notes')
     const fileId = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const fileRef = storageRef(storage, `${pathPrefix}/${fileId}`);
 
-    const snapshot = await uploadBytes(fileRef, file);
-    const downloadUrl = await getDownloadURL(snapshot.ref);
-    return { success: true, url: downloadUrl, fullPath: snapshot.ref.fullPath };
+    // Set 3-second timeout so unconfigured/blocked storage buckets don't block the UI
+    const uploadPromise = (async () => {
+      const snapshot = await uploadBytes(fileRef, file);
+      const downloadUrl = await getDownloadURL(snapshot.ref);
+      return { success: true, url: downloadUrl, fullPath: snapshot.ref.fullPath };
+    })();
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Cloud storage upload timed out — saving to local/embedded database')), 3000)
+    );
+
+    return await Promise.race([uploadPromise, timeoutPromise]);
   } catch (err) {
-    console.error('File upload error:', err);
+    console.warn('Storage upload fallback:', err.message);
     return { success: false, error: err.message, mode: 'local' };
   }
 };
@@ -699,11 +708,11 @@ export const syncNotesToCloud = async (note) => {
     Object.keys(note).forEach((key) => {
       const val = note[key];
       if (val !== undefined && val !== null) {
-        // Exclude huge base64 data and blob URLs to avoid 1MB Firestore document limit
-        if (key === 'fileData' && typeof val === 'string' && (val.length > 300000 || val.startsWith('blob:'))) {
+        // Exclude huge base64 data (> 700KB) and raw blob URLs to stay within Firestore 1MB doc limit
+        if (key === 'fileData' && typeof val === 'string' && (val.length > 700000 || val.startsWith('blob:'))) {
           return;
         }
-        // Skip blob: URLs for fileUrl — only store cloud storage URLs
+        // Skip blob: URLs for fileUrl — only store real cloud storage URLs
         if (key === 'fileUrl' && typeof val === 'string' && val.startsWith('blob:')) {
           return;
         }
@@ -719,27 +728,26 @@ export const syncNotesToCloud = async (note) => {
 export const listenToClassNotes = (classId, callback) => {
   if (!isFirebaseConnected || !db) return () => {};
   try {
-    const q = query(
-      col('classNotes'),
-      where('targetClassId', 'in', [classId, 'ALL']),
-      orderBy('createdAt', 'desc')
-    );
-    return onSnapshot(q, (snap) => {
-      callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    // Listen to collection with client-side filter to prevent missing-composite-index runtime errors
+    return onSnapshot(col('classNotes'), (snap) => {
+      const allDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const filtered = (classId === 'ALL' || !classId)
+        ? allDocs
+        : allDocs.filter(d => !d.targetClassId || d.targetClassId === classId || d.targetClassId === 'ALL');
+      
+      // Sort newest first
+      filtered.sort((a, b) => {
+        const tA = a.createdAt?.seconds || (typeof a.createdAt === 'string' ? new Date(a.createdAt).getTime() : 0);
+        const tB = b.createdAt?.seconds || (typeof b.createdAt === 'string' ? new Date(b.createdAt).getTime() : 0);
+        return tB - tA;
+      });
+      callback(filtered);
     }, (err) => {
       console.warn('Class notes listener fallback:', err.message);
-      return onSnapshot(col('classNotes'), (snap) => {
-        const docs = snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
-          .filter(d => !d.targetClassId || d.targetClassId === classId || d.targetClassId === 'ALL');
-        callback(docs);
-      });
     });
-  } catch {
-    return onSnapshot(col('classNotes'), (snap) => {
-      const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      callback(docs);
-    });
+  } catch (err) {
+    console.warn('Class notes subscription catch:', err);
+    return () => {};
   }
 };
 

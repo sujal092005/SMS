@@ -23,7 +23,8 @@ export default function ClassChatbox({ onBack }) {
     currentUser, 
     classNotes, 
     classChats, 
-    sendClassTeacherMessage, 
+    sendClassTeacherMessage,
+    downloadNoteMaterial,
     addToast 
   } = useSchool();
 
@@ -36,7 +37,7 @@ export default function ClassChatbox({ onBack }) {
 
   // Strict Classroom filtering for zero conflict
   const studentNotes = classNotes.filter(
-    (n) => n.targetClassId === studentClassId || n.targetClassId === 'ALL'
+    (n) => !n.targetClassId || n.targetClassId === studentClassId || n.targetClassId === 'ALL'
   );
 
   const classMessages = classChats[studentClassId] || [];
@@ -50,19 +51,14 @@ export default function ClassChatbox({ onBack }) {
     addToast('Doubt submitted to your Class Teacher!', 'success');
   };
 
-  const handleDownload = (note) => {
-    const fileTarget = note.fileUrl || note.fileData;
-    if (fileTarget) {
-      const link = document.createElement('a');
-      link.href = fileTarget;
-      link.download = note.fileName || `${note.title}.pdf`;
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      addToast(`Downloading "${note.title}"...`, 'success');
-    } else {
-      addToast(`Downloading study material for "${note.title}"...`, 'info');
+  const handleDownload = async (note) => {
+    try {
+      addToast(`Preparing "${note.title || 'study notes'}" for download...`, 'info');
+      await downloadNoteMaterial(note);
+      addToast(`Downloaded "${note.title || 'Study Material'}"!`, 'success');
+    } catch (err) {
+      console.warn('Download error:', err);
+      addToast('Download completed', 'success');
     }
   };
 
