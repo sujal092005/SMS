@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSchool } from '../../context/SchoolContext';
 import { useTranslation } from 'react-i18next';
+import { Capacitor } from '@capacitor/core';
+import { Geolocation } from '@capacitor/geolocation';
 import {
   Navigation,
   Play,
@@ -20,7 +22,7 @@ import {
 } from 'lucide-react';
 
 export default function DriverTripController({ onBack }) {
-  const { isTripActive, startTrip, stopTrip, addToast, updateBusCoords } = useSchool();
+  const { currentUser, isTripActive, startTrip, stopTrip, addToast, updateBusCoords } = useSchool();
   const { t } = useTranslation();
 
   const BUS_OPTIONS = [
@@ -28,12 +30,12 @@ export default function DriverTripController({ onBack }) {
     { id: 'BUS-02', label: t('driver.bus2'), plateNumber: 'MH-04-CD-5678', color: 'from-emerald-600 to-teal-700' },
   ];
 
-  // Form state
-  const [step, setStep] = useState('form'); // 'form' | 'trip'
-  const [selectedBus, setSelectedBus] = useState('');
-  const [driverName, setDriverName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [totalStudents, setTotalStudents] = useState('');
+  // Form state auto-populated from currentUser profile
+  const [step, setStep] = useState(isTripActive ? 'trip' : 'form'); // 'form' | 'trip'
+  const [selectedBus, setSelectedBus] = useState(() => currentUser?.busId || currentUser?.assignedBus || 'BUS-01');
+  const [driverName, setDriverName] = useState(() => currentUser?.name || currentUser?.driverName || 'Rajesh Kumar');
+  const [phone, setPhone] = useState(() => (currentUser?.phone || currentUser?.driverPhone || '9876543210').replace(/\D/g, '').slice(-10));
+  const [totalStudents, setTotalStudents] = useState('35');
   const [formError, setFormError] = useState('');
 
   // GPS / trip state
@@ -48,7 +50,10 @@ export default function DriverTripController({ onBack }) {
   // Stop timers on unmount
   useEffect(() => {
     return () => {
-      if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
+      if (watchIdRef.current) {
+        if (Capacitor.isNativePlatform()) Geolocation.clearWatch({ id: watchIdRef.current });
+        else navigator.geolocation.clearWatch(watchIdRef.current);
+      }
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
@@ -61,7 +66,7 @@ export default function DriverTripController({ onBack }) {
     return '';
   };
 
-  const handleStartJourney = () => {
+  const handleStartJourney = async () => {
     const err = validateForm();
     if (err) { setFormError(err); return; }
     setFormError('');
@@ -77,25 +82,42 @@ export default function DriverTripController({ onBack }) {
       const c = { lat, lng };
       setCoords(c);
       setSpeed(currentSpeedValue);
-      setGpsStatus(isFallback ? 'GPS Live (Simulated Movement) ✓' : 'Hardware GPS Live ✓');
+      setGpsStatus(isFallback ? 'GPS Live (Simulated Movement) ✓' : 'Native Hardware GPS Live ✓');
       updateBusCoords(selectedBus, c, { ...driverDetails, speed: currentSpeedValue });
     };
 
-    // Attempt Hardware Geolocation
-    if ('geolocation' in navigator) {
-      // First try immediate single fix
+    // Attempt Native Capacitor Geolocation or Browser Geolocation
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await Geolocation.requestPermissions();
+        const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true });
+        pushLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 28);
+
+        watchIdRef.current = await Geolocation.watchPosition(
+          { enableHighAccuracy: true },
+          (position, watchErr) => {
+            if (position) {
+              pushLocation(position.coords.latitude, position.coords.longitude, position.coords.speed ? Math.round(position.coords.speed * 3.6) : 30);
+            } else if (watchErr) {
+              console.warn('Native GPS watch warning:', watchErr);
+            }
+          }
+        );
+      } catch (nativeErr) {
+        console.warn('Capacitor native geolocation error:', nativeErr);
+        pushLocation(18.5204, 73.8567, 30, true);
+      }
+    } else if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           pushLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : 28);
         },
         () => {
-          // Default initial fallback (Pune/Nashik regional transit route)
           pushLocation(18.5204, 73.8567, 30, true);
         },
         { enableHighAccuracy: true, timeout: 5000 }
       );
 
-      // Continuous Watch Position
       let stepCount = 0;
       watchIdRef.current = navigator.geolocation.watchPosition(
         (pos) => {
@@ -103,7 +125,6 @@ export default function DriverTripController({ onBack }) {
         },
         (err) => {
           console.warn('Hardware GPS unavailable/denied:', err);
-          // Auto-simulation ticker for desktop testing
           stepCount += 1;
           const latSim = 18.5204 + (stepCount * 0.0003);
           const lngSim = 73.8567 + (stepCount * 0.0004);
@@ -130,7 +151,14 @@ export default function DriverTripController({ onBack }) {
   };
 
   const handleStopJourney = () => {
-    if (watchIdRef.current) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; }
+    if (watchIdRef.current) {
+      if (Capacitor.isNativePlatform()) {
+        Geolocation.clearWatch({ id: watchIdRef.current });
+      } else {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+      watchIdRef.current = null;
+    }
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     stopTrip();
     setStep('form');

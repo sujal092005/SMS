@@ -935,7 +935,8 @@ export function SchoolProvider({ children }) {
       return { classId, total: 0, present: 0, absent: 0, late: 0, rate: 100, isSubmitted: false, students: [] };
     }
 
-    const latestRecord = attendanceRecords.find((r) => r.classId === classId);
+    const sortedRecords = [...attendanceRecords].sort((a, b) => new Date(b.submittedAt || b.date) - new Date(a.submittedAt || a.date));
+    const latestRecord = sortedRecords.find((r) => r.classId === classId);
     let present = 0;
     let absent = 0;
     let late = 0;

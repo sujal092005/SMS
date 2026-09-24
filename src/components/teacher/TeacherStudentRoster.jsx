@@ -62,7 +62,7 @@ export default function TeacherStudentRoster({ onBack }) {
   // Filter students
   const filteredStudents = studentsList.filter((s) => {
     // Only show students belonging to this class if class teacher
-    const isThisClass = !s.classId || s.classId === assignedClass || studentsList.length <= 50;
+    const isThisClass = s.classId === assignedClass;
     if (!isThisClass && currentUser?.role !== 'admin') return false;
 
     const matchesSearch =

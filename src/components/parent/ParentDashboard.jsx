@@ -15,10 +15,21 @@ import {
 } from 'lucide-react';
 
 export default function ParentDashboard({ onNavigate }) {
-  const { currentUser, isTripActive, currentSpeed, currentEta, busCoords, notices } = useSchool();
+  const { currentUser, isTripActive, currentSpeed, currentEta, busCoords, notices, getClassAttendance } = useSchool();
   const { t } = useTranslation();
 
   const activeBusCount = Object.keys(busCoords).length;
+  const childName = currentUser?.studentName || currentUser?.childName || 'Student';
+  const childClass = currentUser?.classId || '8A';
+  const childRoll = currentUser?.rollNo || '01';
+
+  // Get real-time class attendance
+  const classStats = getClassAttendance ? getClassAttendance(childClass) : null;
+  const studentInRecords = classStats?.students?.find(
+    (s) => (s.name || '').toLowerCase() === (childName || '').toLowerCase() || s.loginId === currentUser?.studentLoginId
+  );
+  const currentStatus = studentInRecords?.status ? studentInRecords.status.toUpperCase() : 'PRESENT';
+  const isPresent = currentStatus !== 'ABSENT';
 
   return (
     <div className="flex-1 flex flex-col p-4 bg-[#FAF8FF] pb-24 space-y-4">
@@ -29,7 +40,7 @@ export default function ParentDashboard({ onNavigate }) {
             {t('parent.consoleTitle')}
           </span>
           <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
-            {t('auth.student')}: {t('parent.childName')} ({t('parent.childClass')})
+            Child: {childName} (Class {childClass})
           </span>
         </div>
 
@@ -48,25 +59,27 @@ export default function ParentDashboard({ onNavigate }) {
       <div className="bg-white rounded-3xl p-4 border border-slate-200/90 shadow-xs space-y-3">
         <div className="flex items-center justify-between border-b border-slate-100 pb-2">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <CheckCircle2 className={`w-4 h-4 ${isPresent ? 'text-emerald-600' : 'text-rose-600'}`} />
             <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">{t('teacher.todayStatus')}</span>
           </div>
-          <span className="text-[10.5px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-            {t('teacher.present')}
+          <span className={`text-[10.5px] font-bold px-2 py-0.5 rounded-full border ${
+            isPresent ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'
+          }`}>
+            {currentStatus}
           </span>
         </div>
 
         <div className="flex items-center gap-3 pt-1">
           <img
             src="https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80"
-            alt="Aarav Sharma"
+            alt={childName}
             className="w-12 h-12 rounded-2xl object-cover border border-slate-200 shadow-xs"
           />
           <div className="flex-1">
-            <h3 className="text-sm font-bold text-slate-900">{t('parent.childName')}</h3>
-            <p className="text-xs text-slate-500">Roll #14 • {t('parent.childClass')}</p>
-            <p className="text-[10.5px] text-emerald-700 font-semibold mt-0.5">
-              Attendance verified • 08:20 AM
+            <h3 className="text-sm font-bold text-slate-900">{childName}</h3>
+            <p className="text-xs text-slate-500">Roll #{childRoll} • Class {childClass}</p>
+            <p className={`text-[10.5px] font-semibold mt-0.5 ${isPresent ? 'text-emerald-700' : 'text-rose-700'}`}>
+              {isPresent ? 'Attendance verified for today' : 'Marked absent for today'}
             </p>
           </div>
         </div>

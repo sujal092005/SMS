@@ -25,7 +25,9 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  updatePassword
+  updatePassword,
+  initializeAuth,
+  indexedDBLocalPersistence
 } from 'firebase/auth';
 import {
   getStorage,
@@ -58,7 +60,13 @@ try {
   if (firebaseConfig.apiKey && firebaseConfig.apiKey.length > 5) {
     app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
     db = getFirestore(app);
-    auth = getAuth(app);
+    try {
+      auth = initializeAuth(app, {
+        persistence: indexedDBLocalPersistence
+      });
+    } catch (e) {
+      auth = getAuth(app);
+    }
     try {
       storage = getStorage(app);
     } catch (sErr) {

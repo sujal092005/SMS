@@ -584,12 +584,15 @@ exports.resetUserPassword = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('permission-denied', 'Only admin or that class teacher can reset student password.');
     }
 
-    // Read student's DOB from studentPrivate
+    // Read student's DOB from studentPrivate or student profile
     const privateDoc = await db.doc(`studentPrivate/${targetUid}`).get();
     if (privateDoc.exists && privateDoc.data().dob) {
       newPassword = privateDoc.data().dob;
+    } else if (targetData.dob) {
+      newPassword = String(targetData.dob).replace(/[^0-9]/g, '');
     } else {
-      newPassword = 'Password@123';
+      // Default student DOB format (DDMMYYYY)
+      newPassword = '15082012';
     }
   } else if (targetData.role === 'parent') {
     // Class Teacher or Admin can reset parent

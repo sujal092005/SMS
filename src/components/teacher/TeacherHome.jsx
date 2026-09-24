@@ -67,61 +67,70 @@ export default function TeacherHome({ onNavigate }) {
         </div>
       </div>
 
-      {/* Class Roster & Admissions Highlight Card */}
-      <div className="p-4 rounded-3xl bg-gradient-to-tr from-[#1E3A8A] via-indigo-900 to-blue-800 text-white shadow-xl shadow-blue-950/20 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center backdrop-blur-xs text-white">
-            <Users className="w-6 h-6" />
+      {/* Class Roster & Admissions Highlight Card - Only for Class Teachers */}
+      {currentUser?.role !== 'subjectTeacher' ? (
+        <div className="p-4 rounded-3xl bg-gradient-to-tr from-[#1E3A8A] via-indigo-900 to-blue-800 text-white shadow-xl shadow-blue-950/20 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center backdrop-blur-xs text-white">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-blue-200 tracking-wider">
+                Class {assignedClass} Roster
+              </span>
+              <h3 className="text-sm font-extrabold text-white flex items-center gap-1.5">
+                <span>{classStudents.length} Students Enrolled</span>
+              </h3>
+              <p className="text-[10.5px] text-blue-100 mt-0.5">
+                Single & bulk CSV enrollment with auto-parent login
+              </p>
+            </div>
           </div>
-          <div>
-            <span className="text-[10px] uppercase font-bold text-blue-200 tracking-wider">
-              Class {assignedClass} Roster
-            </span>
-            <h3 className="text-sm font-extrabold text-white flex items-center gap-1.5">
-              <span>{classStudents.length} Students Enrolled</span>
-            </h3>
-            <p className="text-[10.5px] text-blue-100 mt-0.5">
-              Single & bulk CSV enrollment with auto-parent login
-            </p>
-          </div>
+
+          <button
+            onClick={() => onNavigate('roster')}
+            className="px-3.5 py-2 rounded-xl bg-white text-blue-900 font-extrabold text-xs shadow-md hover:bg-blue-50 active:scale-95 transition-all flex items-center gap-1 flex-shrink-0"
+          >
+            <span>Manage</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
         </div>
-
-        <button
-          onClick={() => onNavigate('roster')}
-          className="px-3.5 py-2 rounded-xl bg-white text-blue-900 font-extrabold text-xs shadow-md hover:bg-blue-50 active:scale-95 transition-all flex items-center gap-1 flex-shrink-0"
-        >
-          <span>Manage</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
-      </div>
-
-      {/* Student Attendance Tracker Banner */}
-      <div className="p-4 rounded-3xl bg-gradient-to-r from-emerald-600 via-teal-700 to-emerald-800 text-white shadow-lg shadow-emerald-950/15 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center backdrop-blur-xs text-white">
-            <CheckSquare className="w-6 h-6 text-emerald-200" />
-          </div>
-          <div>
-            <span className="text-[10px] uppercase font-bold text-emerald-200 tracking-wider">
-              Student Attendance Tracker
-            </span>
-            <h3 className="text-sm font-extrabold text-white">
-              Mark Roll-Call (Present / Absent)
-            </h3>
-            <p className="text-[10.5px] text-emerald-100 mt-0.5">
-              Updates Admin Dashboard & notifies parents in real-time
-            </p>
-          </div>
+      ) : (
+        <div className="p-3.5 rounded-3xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold flex items-center justify-between">
+          <span>Subject Faculty Mode: Class roster & roll-call managed by Class Teacher.</span>
+          <span className="text-[10px] bg-amber-200 px-2 py-0.5 rounded-full font-bold">Subject Faculty</span>
         </div>
+      )}
 
-        <button
-          onClick={() => onNavigate('rollcall')}
-          className="px-3.5 py-2 rounded-xl bg-white text-emerald-900 font-extrabold text-xs shadow-md hover:bg-emerald-50 active:scale-95 transition-all flex items-center gap-1 flex-shrink-0"
-        >
-          <span>Mark Now</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
-      </div>
+      {/* Student Attendance Tracker Banner - Only for Class Teachers */}
+      {currentUser?.role !== 'subjectTeacher' && (
+        <div className="p-4 rounded-3xl bg-gradient-to-r from-emerald-600 via-teal-700 to-emerald-800 text-white shadow-lg shadow-emerald-950/15 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center backdrop-blur-xs text-white">
+              <CheckSquare className="w-6 h-6 text-emerald-200" />
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-emerald-200 tracking-wider">
+                Student Attendance Tracker
+              </span>
+              <h3 className="text-sm font-extrabold text-white">
+                Mark Roll-Call (Present / Absent)
+              </h3>
+              <p className="text-[10.5px] text-emerald-100 mt-0.5">
+                Updates Admin Dashboard & notifies parents in real-time
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => onNavigate('rollcall')}
+            className="px-3.5 py-2 rounded-xl bg-white text-emerald-900 font-extrabold text-xs shadow-md hover:bg-emerald-50 active:scale-95 transition-all flex items-center gap-1 flex-shrink-0"
+          >
+            <span>Mark Now</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Campus Gate Clock-In Status Alert Card */}
       <div className="p-3.5 rounded-3xl bg-slate-900 text-white shadow-xs flex items-center justify-between">

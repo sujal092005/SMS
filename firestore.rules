@@ -47,10 +47,7 @@ service cloud.firestore {
     // TODO: Once Firebase Auth (Email/Password) is enabled in Firebase Console and users are
     // migrated to real Auth accounts, tighten these rules back to role-based access.
 
-    // Global development wildcard: allow all documents and nested subcollections
-    match /{document=**} {
-      allow read, write: if true;
-    }
+    // Global role-based access rules (secured against unauthorized access)
 
     // 1. Users collection – open for institutional admin to provision accounts
     match /users/{userId} {

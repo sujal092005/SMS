@@ -1,13 +1,58 @@
 // Push Notification Service for RAVS Smart School
-// Uses Web Notifications API + Firestore listeners
-// Works in browser and Capacitor Android WebView
+// Integrates WhatsApp-style Heads-Up Banners (Capacitor LocalNotifications + PushNotifications + Web API)
+import { Capacitor } from '@capacitor/core';
+import { PushNotifications } from '@capacitor/push-notifications';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 let notificationPermission = 'default';
 
 /**
- * Request notification permission from the user
+ * Initialize High-Importance WhatsApp-style Notification Channel on Android
+ */
+async function setupNativeChannels() {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await LocalNotifications.createChannel({
+        id: 'ravs_high_alerts',
+        name: 'RAVS Campus Urgent Alerts',
+        description: 'High priority heads-up notifications for attendance, notices & bus tracking',
+        importance: 5, // IMPORTANCE_HIGH (displays heads-up banner over apps, sound & vibration)
+        visibility: 1, // VISIBILITY_PUBLIC (shows on lock screen)
+        vibration: true,
+        sound: 'default'
+      });
+      console.log('[Native Push] High Importance Notification Channel Created');
+    } catch (err) {
+      console.warn('[Native Push] Channel creation warning:', err.message);
+    }
+  }
+}
+
+// Auto-run channel creation
+setupNativeChannels();
+
+/**
+ * Request notification permission from the user (Native Android + Web)
  */
 export async function requestNotificationPermission() {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const localReq = await LocalNotifications.requestPermissions();
+      const pushStatus = await PushNotifications.checkPermissions();
+      if (pushStatus.receive === 'prompt' || pushStatus.receive === 'prompt-with-rationale') {
+        const req = await PushNotifications.requestPermissions();
+        if (req.receive === 'granted') {
+          await PushNotifications.register();
+        }
+      } else if (pushStatus.receive === 'granted') {
+        await PushNotifications.register();
+      }
+      return localReq.display === 'granted';
+    } catch (e) {
+      console.warn('[Native Push] Permission request error:', e.message);
+    }
+  }
+
   if (!('Notification' in window)) {
     console.warn('[Notifications] Not supported in this browser');
     return false;
@@ -15,7 +60,6 @@ export async function requestNotificationPermission() {
   try {
     const result = await Notification.requestPermission();
     notificationPermission = result;
-    console.log('[Notifications] Permission:', result);
     return result === 'granted';
   } catch (err) {
     console.warn('[Notifications] Permission error:', err);
@@ -24,16 +68,38 @@ export async function requestNotificationPermission() {
 }
 
 /**
- * Show a local push notification
+ * Show a WhatsApp-style heads-up banner notification (Native Android + Web)
  */
-export function showNotification(title, body, options = {}) {
-  // Also dispatch a custom event for in-app notification toast
+export async function showNotification(title, body, options = {}) {
+  // Always dispatch in-app notification event for React toast
   window.dispatchEvent(new CustomEvent('ravs-notification', {
     detail: { title, body, icon: options.icon || '📢', tag: options.tag || '', timestamp: Date.now() }
   }));
 
+  // Trigger Native Android Heads-Up Banner Notification (WhatsApp Style)
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            title: title,
+            body: body,
+            id: Math.floor(Math.random() * 100000) + 1,
+            channelId: 'ravs_high_alerts', // High priority channel -> Heads-up banner
+            schedule: { at: new Date(Date.now() + 100) },
+            sound: 'default',
+            actionTypeId: '',
+            extra: options
+          }
+        ]
+      });
+      return;
+    } catch (nativeErr) {
+      console.warn('[Native Push] Schedule error:', nativeErr.message);
+    }
+  }
+
   if (!('Notification' in window) || notificationPermission !== 'granted') {
-    console.log('[Notifications] In-app only:', title, body);
     return;
   }
 
@@ -48,7 +114,6 @@ export function showNotification(title, body, options = {}) {
       ...options
     });
 
-    // Auto-close after 8 seconds
     setTimeout(() => notification.close(), 8000);
 
     notification.onclick = () => {

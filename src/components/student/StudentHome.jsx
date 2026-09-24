@@ -28,18 +28,13 @@ export default function StudentHome({ onNavigate }) {
   const { t } = useTranslation();
 
   const studentClassId = currentUser?.classId || '8A';
-  const studentClassName = currentUser?.assignedClass || 'Class 8-A';
+  const studentClassName = currentUser?.assignedClass || `Class ${studentClassId}`;
+  const studentRollNo = currentUser?.rollNo || currentUser?.roll || '001';
 
   // Strict notes count for this class
   const classNotesCount = (classNotes || []).filter(
     (n) => n.targetClassId === studentClassId || n.targetClassId === 'ALL'
   ).length;
-
-  const currentStudent = (students8A || []).find((s) => s.isFeatured || s.roll === '8A-14') || {
-    name: currentUser?.name || 'Aarav Sharma',
-    roll: '8A-14',
-    status: 'PRESENT'
-  };
 
   return (
     <div className="flex-1 flex flex-col p-4 bg-[#FAF8FF] pb-28 space-y-4">
@@ -48,7 +43,7 @@ export default function StudentHome({ onNavigate }) {
         <div className="flex items-center justify-between">
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
-            <span>{studentClassName} • Roll {currentStudent.roll}</span>
+            <span>{studentClassName} • Roll #{studentRollNo}</span>
           </div>
 
           <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 flex items-center gap-1">

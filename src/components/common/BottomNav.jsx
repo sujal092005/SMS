@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 export default function BottomNav({ currentTab, onTabChange }) {
-  const { activeRole } = useSchool();
+  const { activeRole, mustChangePassword } = useSchool();
   const { t } = useTranslation();
 
   const getNavItems = () => {
@@ -61,7 +61,7 @@ export default function BottomNav({ currentTab, onTabChange }) {
   };
 
   const navItems = getNavItems();
-  if (!navItems.length) return null;
+  if (!navItems.length || mustChangePassword) return null;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-[0_-4px_16px_rgba(15,23,42,0.04)] pb-safe">

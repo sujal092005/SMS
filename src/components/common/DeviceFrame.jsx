@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Smartphone, Monitor, Wifi, Battery, Signal } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 
 export default function DeviceFrame({ children }) {
-  const [isMobileFrame, setIsMobileFrame] = useState(true);
+  const isNative = typeof window !== 'undefined' && Capacitor.isNativePlatform();
+  const [isMobileFrame, setIsMobileFrame] = useState(!isNative);
   const [currentTime, setCurrentTime] = useState('09:41');
 
   useEffect(() => {

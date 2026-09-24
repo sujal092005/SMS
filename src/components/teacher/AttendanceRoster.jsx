@@ -35,7 +35,7 @@ export default function AttendanceRoster({ onBack }) {
   // When students load or change, initialize attendance map with PRESENT for new students
   useEffect(() => {
     const classStudentsLocal = studentsList.filter(
-      (s) => !s.classId || s.classId === assignedClass || studentsList.length <= 50
+      (s) => s.classId === assignedClass
     );
     setAttendanceMap((prev) => {
       const updated = { ...prev };
@@ -59,7 +59,7 @@ export default function AttendanceRoster({ onBack }) {
   const fileInputRef = useRef(null);
 
   // Filter students
-  const classStudents = studentsList.filter((s) => !s.classId || s.classId === assignedClass || studentsList.length <= 50);
+  const classStudents = studentsList.filter((s) => s.classId === assignedClass);
 
   const filteredStudents = classStudents.filter((student) => {
     const sId = student.uid || student.id;
