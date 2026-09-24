@@ -189,6 +189,37 @@ export const firebaseSignInWithId = async (loginId, password) => {
       };
     }
 
+    // ── 3b. DRIVER → drivers collection lookup ─────────────────────────────
+    let driversSnap = await getDocs(query(collection(db, 'drivers'), where('loginId', '==', cleanId)));
+    if (driversSnap.empty) {
+      driversSnap = await getDocs(query(collection(db, 'drivers'), where('phone', '==', cleanId)));
+    }
+    if (!driversSnap.empty) {
+      const userDoc = driversSnap.docs[0].data();
+      const docId = driversSnap.docs[0].id;
+      if (userDoc.active === false)
+        return { success: false, error: 'This driver account has been deactivated. Please contact administration.' };
+      const validPass = userDoc.password || 'Driver@123';
+      if (validPass && cleanPass !== validPass)
+        return { success: false, error: 'Invalid Password. Please check your credentials.' };
+      return {
+        success: true,
+        userData: {
+          uid: docId,
+          loginId: userDoc.loginId || cleanId,
+          name: userDoc.name || userDoc.driverName || 'Bus Driver',
+          role: 'driver',
+          uiRole: 'DRIVER',
+          phone: userDoc.phone || userDoc.driverPhone || '',
+          busId: userDoc.busId || userDoc.assignedBus || 'BUS-01',
+          licenseNumber: userDoc.licenseNumber || '',
+          active: true,
+          mustChangePassword: !!userDoc.mustChangePassword
+        },
+        claims: { role: 'driver' }
+      };
+    }
+
     // ── 4. STUDENT → NEW: direct O(1) lookup via classes/{classId}/class_student/{loginId} ──
     //    loginId format: RAVS-10A-001 — parse class from it, then getDoc directly
     const parsedClass = parseClassFromLoginId(cleanId);
@@ -567,6 +598,66 @@ export const listenToTeachersList = (callback) => {
       callback(uSnap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
   });
+};
+
+export const listenToDriversList = (callback) => {
+  if (!isFirebaseConnected || !db) return () => {};
+  return onSnapshot(col('drivers'), (snap) => {
+    const drivers = snap.docs.map(d => ({
+      id: d.id,
+      ...d.data(),
+      name: d.data().name || d.data().driverName || 'Driver',
+      phone: d.data().phone || d.data().driverPhone || '',
+      busId: d.data().busId || d.data().assignedBus || 'BUS-01'
+    }));
+    callback(drivers);
+  }, (err) => {
+    console.warn('Drivers list listener error:', err.message);
+    // Fallback to users collection
+    const q = query(col('users'), where('role', '==', 'driver'));
+    return onSnapshot(q, (uSnap) => {
+      callback(uSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+  });
+};
+
+export const addDriverToCloud = async (driverData) => {
+  if (!isFirebaseConnected || !db) return { success: false, mode: 'local' };
+  try {
+    const driverId = driverData.id || `drv_${Date.now()}`;
+    const cleanDriver = {
+      id: driverId,
+      loginId: driverData.loginId || `DRV-${(driverData.name || 'USER').toUpperCase().replace(/\s+/g, '').slice(0, 6)}`,
+      name: driverData.name || 'Bus Driver',
+      driverName: driverData.name || 'Bus Driver',
+      phone: driverData.phone || '',
+      driverPhone: driverData.phone || '',
+      busId: driverData.busId || 'BUS-01',
+      assignedBus: driverData.busId || 'BUS-01',
+      licenseNumber: driverData.licenseNumber || '',
+      password: driverData.password || 'Driver@123',
+      role: 'driver',
+      active: true,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    await setDoc(docRef('drivers', driverId), cleanDriver, { merge: true });
+    await setDoc(docRef('users', driverId), cleanDriver, { merge: true });
+    return { success: true, id: driverId, driver: cleanDriver };
+  } catch (err) {
+    console.error('Error adding driver to cloud:', err);
+    return { success: false, error: err.message };
+  }
+};
+
+export const deleteDriverFromCloud = async (driverId) => {
+  if (!isFirebaseConnected || !db) return;
+  try {
+    await deleteDoc(docRef('drivers', driverId));
+    await deleteDoc(docRef('users', driverId));
+  } catch (err) {
+    console.error('Error deleting driver from cloud:', err);
+  }
 };
 
 export const listenToStudentsList = (classId, callback) => {

@@ -1,271 +1,246 @@
 // AI Academic Study Assistant Service for RAVS Smart School
-// Powered by Multi-Engine LLM Architecture:
-// 1. Free Fast Public AI Engine (GPT / Llama 3.3 / Mistral - No Key Required)
-// 2. Google Gemini API (if user enters a key)
-// 3. Offline Smart Knowledge Engine
+// Engine Priority:
+//   1. Groq AI    (Llama 3.3 70B - Fast, Free, Genuine answers)
+//   2. Google Gemini API (if AQ. / AIza key is provided)
+//   3. Pollinations.ai  (Free public LLM, no key needed)
+//   4. Offline Smart Knowledge Engine (always works)
 
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
+const GROQ_API_KEY   = import.meta.env.VITE_GROQ_API_KEY   || '';
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
-/**
- * Intelligent Offline Tutor Fallback (for zero-connectivity offline usage)
- */
-function generateOfflineResponse(question) {
-  const qLower = (question || '').toLowerCase();
-  let overview = `Here is the comprehensive explanation for: "${question}".`;
-  let steps = [
-    `1. Definition & Core Concept: "${question}" is an important topic. Focus on its key principles, real-world utility, and structured explanation.`,
-    `2. Key Components: Break down the concept into major parts, functions, and standard formulas or terminology.`,
-    `3. Exam Strategy: Write clear bullet points, underline key terminology, and provide practical examples for maximum marks.`
-  ];
-  let tip = "Academic Exam Tip: Always define fundamental terms clearly, provide examples, and draw neat diagrams where applicable.";
+// Shared system prompt
+const SYSTEM_PROMPT = `You are an expert AI Study Assistant for RAVS Smart School students (Grades 5-12, State Board & CBSE).
+Answer every question accurately, clearly, and helpfully.
+Structure your response as:
+1. Clear explanation / definition
+2. Key points or step-by-step breakdown
+3. Real-world example or application
+4. Board Exam Tip for scoring high marks.
+Use simple English. Include relevant formulas, dates, or scientific terms where needed.`;
 
-  if (qLower.includes('google')) {
-    overview = "Google is the world's leading technology company and internet search engine founded in 1998 by Larry Page and Sergey Brin.";
-    steps = [
-      "1. Search Engine: Google indexes billions of web pages using web crawlers (Googlebot) and PageRank algorithms to deliver instant, relevant search results.",
-      "2. Core Ecosystem: Includes Android OS, Chrome browser, YouTube, Google Maps, Gmail, Google Drive, and Cloud Services.",
-      "3. Technology & AI: Google develops advanced Artificial Intelligence (Gemini, DeepMind, Tensor Processing Units) and quantum computing technologies."
-    ];
-    tip = "Computer Science Tip: For tech questions, mention the founding year, primary purpose (indexing & information retrieval), and key services.";
-  } else if (qLower.includes('photosynthesis')) {
-    overview = "Photosynthesis (प्रकाशसंश्लेषण) is the biological process where green plants convert sunlight, carbon dioxide, and water into chemical energy (glucose) and oxygen.";
-    steps = [
-      "1. Balanced Chemical Reaction: 6CO₂ + 6H₂O + Sunlight (in Chlorophyll) → C₆H₁₂O₆ + 6O₂.",
-      "2. Light Reactions: Sunlight is absorbed in the thylakoid membranes, photolyzing H₂O and generating ATP and NADPH.",
-      "3. Dark Reactions (Calvin Cycle): CO₂ is fixed into Glucose in the chloroplast stroma."
-    ];
-    tip = "Board Exam Tip: Draw the chloroplast diagram, label Stroma and Thylakoid, and write the balanced chemical equation.";
-  } else if (qLower.includes('quadratic') || qLower.includes('equation')) {
-    overview = "A Quadratic Equation (वर्गसमीकरण) is a second-degree polynomial equation in standard form: ax² + bx + c = 0 (where a ≠ 0).";
-    steps = [
-      "1. Quadratic Formula: x = [-b ± √(b² - 4ac)] / (2a).",
-      "2. Discriminant (Δ = b² - 4ac): If Δ > 0 (two distinct real roots), Δ = 0 (equal roots), Δ < 0 (complex roots).",
-      "3. Factorisation: Split the middle term 'bx' into two factors that multiply to give 'a × c'."
-    ];
-    tip = "Board Exam Tip: Explicitly state a, b, c values, compute the discriminant Δ first, then substitute into the formula.";
-  } else if (qLower.includes('newton') || qLower.includes('motion') || qLower.includes('force')) {
-    overview = "Newton's Laws of Motion (न्यूटनचे नियम) describe the relationship between physical forces acting on a body and its motion.";
-    steps = [
-      "1. First Law (Inertia): An object remains at rest or in uniform motion unless acted upon by a net external force.",
-      "2. Second Law (F = ma): The acceleration of an object is directly proportional to net force and inversely proportional to mass (Unit: Newton, N).",
-      "3. Third Law: Every action force has an equal and opposite reaction force."
-    ];
-    tip = "Board Exam Tip: Always state SI units (Force in Newtons, Acceleration in m/s²) and provide everyday examples.";
+// Error-signal filter
+const ERROR_SIGNALS = [
+  'model output error',
+  'must contain either output text',
+  '"error"',
+  '<!DOCTYPE',
+  '<html',
+  'bad request',
+  'rate limit',
+  'too many requests',
+  'service unavailable',
+  'internal server error'
+];
+function isErrorText(text) {
+  const lower = (text || '').toLowerCase();
+  return ERROR_SIGNALS.some(sig => lower.includes(sig.toLowerCase()));
+}
+
+// Format raw LLM text into structured response
+function formatResponse(rawText, question, modelUsed) {
+  const paragraphs = rawText.split('\n\n').filter(p => p.trim().length > 0);
+  let examTip = '';
+  const tipIdx = paragraphs.findIndex(p =>
+    p.toLowerCase().includes('exam tip') ||
+    p.toLowerCase().includes('board exam') ||
+    p.toLowerCase().includes('tip:')
+  );
+  if (tipIdx !== -1) {
+    examTip = paragraphs.splice(tipIdx, 1)[0].replace(/^[*#\s]+/, '').trim();
   }
-
-  const rawText = `${overview}\n\n${steps.join('\n')}\n\nExam Tip: ${tip}`;
   return {
-    title: `Academic Guide: ${question.slice(0, 45)}${question.length > 45 ? '...' : ''}`,
-    steps,
-    examTip: tip,
+    title: `Study Guide: ${question.slice(0, 45)}${question.length > 45 ? '...' : ''}`,
+    steps: paragraphs.length > 1 ? paragraphs : [rawText],
+    examTip: examTip || 'Exam Tip: Define key terms clearly, show your working, and highlight keywords for full marks.',
     text: rawText,
-    modelUsed: 'Smart Syllabus Knowledge Base',
+    modelUsed,
     isGeminiLive: true
   };
 }
 
-/**
- * Ask Free Fast Public LLM Engine via CORS-friendly GET endpoints
- * Supports OpenAI GPT, Llama 3.3, and Mistral models with zero API key requirement
- */
-async function askFreePublicLLM(question) {
-  const systemPrompt = `You are the expert RAVS Smart School AI Study Assistant for school students (Grades 5-12, State Board & CBSE).
-Explain concepts simply, accurately, and thoroughly.
-Structure your answer clearly with:
-- Summary Overview
-- Step-by-step points or key details
-- Real-world application
-- Exam Tip for scoring high marks.`;
+// ENGINE 1: Groq AI (Llama 3.3 70B)
+async function askGroq(question) {
+  if (!GROQ_API_KEY || !GROQ_API_KEY.startsWith('gsk_')) {
+    throw new Error('Groq key not configured');
+  }
+  const models = ['llama-3.3-70b-versatile', 'llama3-70b-8192', 'mixtral-8x7b-32768'];
+  for (const model of models) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GROQ_API_KEY}`
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user',   content: question }
+          ],
+          temperature: 0.5,
+          max_tokens: 1024
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const rawText = data.choices?.[0]?.message?.content?.trim();
+      if (!rawText || rawText.length < 20 || isErrorText(rawText)) continue;
+      return formatResponse(rawText, question, `Groq ${model}`);
+    } catch { /* Try next model */ }
+  }
+  throw new Error('Groq: all models failed');
+}
 
+// ENGINE 2: Google Gemini
+async function askGemini(question) {
+  const key = GEMINI_API_KEY.trim();
+  if (!key || key.length < 10) throw new Error('Gemini key not configured');
+  const isOAuth  = key.startsWith('AQ.');
+  const isApiKey = key.startsWith('AIza');
+  if (!isOAuth && !isApiKey) throw new Error('Gemini key format unrecognised');
+  const requestBody = {
+    contents: [{ parts: [{ text: `${SYSTEM_PROMPT}\n\nStudent Question: "${question}"` }] }],
+    generationConfig: { temperature: 0.4, maxOutputTokens: 1200 }
+  };
+  const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+  for (const model of models) {
+    try {
+      const url = isOAuth
+        ? `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+        : `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+      const headers = { 'Content-Type': 'application/json' };
+      if (isOAuth) headers['Authorization'] = `Bearer ${key}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(requestBody), signal: controller.signal });
+      clearTimeout(timeout);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (!rawText || rawText.length < 20 || isErrorText(rawText)) continue;
+      return formatResponse(rawText, question, `Google ${model}`);
+    } catch { /* Try next model */ }
+  }
+  throw new Error('Gemini: all models failed');
+}
+
+// ENGINE 3: Pollinations.ai (free public)
+async function askPollinations(question) {
+  const encodedQ   = encodeURIComponent(question);
+  const encodedSys = encodeURIComponent(SYSTEM_PROMPT);
   const endpoints = [
-    // 1. GET with OpenAI model
-    `https://text.pollinations.ai/${encodeURIComponent(question)}?model=openai&system=${encodeURIComponent(systemPrompt)}`,
-    // 2. GET with Mistral model
-    `https://text.pollinations.ai/${encodeURIComponent(question)}?model=mistral&system=${encodeURIComponent(systemPrompt)}`,
-    // 3. Direct GET simple endpoint
-    `https://text.pollinations.ai/${encodeURIComponent(question + ' - explain clearly for a student with examples and key points')}`
+    `https://text.pollinations.ai/${encodedQ}?model=openai&system=${encodedSys}`,
+    `https://text.pollinations.ai/${encodedQ}?model=mistral&system=${encodedSys}`,
+    `https://text.pollinations.ai/${encodedQ}`
   ];
-
   for (const url of endpoints) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout per endpoint
-
-      const response = await fetch(url, {
-        method: "GET",
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) continue;
-
-      const rawText = await response.text();
-      if (!rawText || rawText.trim().length < 20) continue;
-
-      const cleanText = rawText.trim();
-      const paragraphs = cleanText.split('\n\n').filter(p => p.trim().length > 0);
-
-      let examTip = "";
-      const tipIdx = paragraphs.findIndex(p =>
-        p.toLowerCase().includes('exam tip') ||
-        p.toLowerCase().includes('board exam') ||
-        p.toLowerCase().includes('tip:') ||
-        p.toLowerCase().includes('🎯')
-      );
-      if (tipIdx !== -1) {
-        examTip = paragraphs[tipIdx].replace(/[*#]/g, '').trim();
-      }
-
-      return {
-        title: `AI Study Guide: ${question.slice(0, 40)}${question.length > 40 ? '...' : ''}`,
-        steps: paragraphs.length > 1 ? paragraphs : [cleanText],
-        examTip: examTip || "Exam Tip: Define terms clearly, highlight key keywords, and give real-life examples for full marks.",
-        text: cleanText,
-        modelUsed: 'Free Public AI (Llama 3.3 / GPT)',
-        isGeminiLive: true
-      };
-    } catch {
-      // Try next endpoint
-    }
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch(url, { method: 'GET', signal: controller.signal });
+      clearTimeout(timeout);
+      if (!res.ok) continue;
+      const rawText = (await res.text()).trim();
+      if (!rawText || rawText.length < 20 || isErrorText(rawText)) continue;
+      return formatResponse(rawText, question, 'Pollinations.ai (GPT/Llama)');
+    } catch { /* Try next endpoint */ }
   }
+  throw new Error('Pollinations: all endpoints failed');
+}
 
-  // Also try POST if GET failed
-  try {
-    const payload = {
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: question }
+// ENGINE 4: Offline Smart Knowledge Base
+function askOffline(question) {
+  const q = (question || '').toLowerCase();
+  const entries = [
+    {
+      keys: ['photosynthesis'],
+      overview: 'Photosynthesis is the process by which green plants use sunlight, CO2, and water to produce glucose and oxygen.',
+      steps: [
+        '1. Equation: 6CO2 + 6H2O + Sunlight (chlorophyll) -> C6H12O6 + 6O2',
+        '2. Light Reactions (Thylakoid): Sunlight splits water (photolysis), producing ATP, NADPH, and O2.',
+        '3. Calvin Cycle (Stroma): CO2 is fixed into glucose using ATP and NADPH.',
+        '4. Example: All food chains begin with photosynthesis - plants are producers.'
       ],
-      model: "openai"
-    };
-
-    const res = await fetch("https://text.pollinations.ai/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-
-    if (res.ok) {
-      const text = await res.text();
-      if (text && text.trim().length >= 20) {
-        const clean = text.trim();
-        const paragraphs = clean.split('\n\n').filter(p => p.trim().length > 0);
-        return {
-          title: `AI Study Guide: ${question.slice(0, 40)}${question.length > 40 ? '...' : ''}`,
-          steps: paragraphs.length > 1 ? paragraphs : [clean],
-          examTip: "Exam Tip: Write step-by-step explanations with neat headings for maximum marks.",
-          text: clean,
-          modelUsed: 'Free Public AI (Llama 3.3 / GPT)',
-          isGeminiLive: true
-        };
-      }
+      tip: 'Board Exam Tip: Draw a labelled chloroplast diagram. Write the balanced equation clearly.'
+    },
+    {
+      keys: ['newton', 'laws of motion', 'force', 'inertia'],
+      overview: "Newton's Laws of Motion describe the relationship between forces and the motion of objects.",
+      steps: [
+        '1. First Law (Inertia): An object stays at rest or in uniform motion unless acted on by a net external force.',
+        '2. Second Law: F = ma. Net Force = Mass x Acceleration. Unit: Newton (N).',
+        '3. Third Law: Every action has an equal and opposite reaction.',
+        '4. Example: A rocket launches by pushing gas downward (Third Law).'
+      ],
+      tip: 'Board Exam Tip: State SI units (N, kg, m/s2). Illustrate with everyday examples.'
+    },
+    {
+      keys: ['quadratic', 'polynomial'],
+      overview: 'A Quadratic Equation is a 2nd-degree polynomial: ax2 + bx + c = 0, where a != 0.',
+      steps: [
+        '1. Quadratic Formula: x = [-b +/- sqrt(b2-4ac)] / 2a',
+        '2. Discriminant (D = b2-4ac): D>0 -> two real roots; D=0 -> equal roots; D<0 -> no real roots.',
+        '3. Factorisation: Split bx into two terms whose product = a*c.',
+        '4. Example: x2 - 5x + 6 = 0 -> (x-2)(x-3) = 0 -> x = 2 or x = 3.'
+      ],
+      tip: 'Board Exam Tip: Identify a, b, c first. Compute discriminant before applying the formula.'
+    },
+    {
+      keys: ['google'],
+      overview: 'Google is the world\'s largest internet company and search engine, founded in 1998 by Larry Page and Sergey Brin.',
+      steps: [
+        '1. Search Engine: Uses PageRank algorithm and Googlebot crawlers to index and rank web pages.',
+        '2. Products: Android OS, Chrome browser, YouTube, Gmail, Google Maps, Google Drive, Google Cloud.',
+        '3. AI: Develops Gemini AI, DeepMind, Tensor Processing Units (TPUs), and quantum computing.',
+        '4. Business: Primary revenue comes from Google Ads (Search Ads, Display Ads, YouTube Ads).'
+      ],
+      tip: 'CS Tip: Mention founding year, core technology (PageRank), key products, and revenue model.'
     }
-  } catch {
-    // Continue to fallback
+  ];
+  const match = entries.find(e => e.keys.some(k => q.includes(k)));
+  if (match) {
+    const rawText = `${match.overview}\n\n${match.steps.join('\n')}\n\nExam Tip: ${match.tip}`;
+    return { title: `Study Guide: ${question.slice(0, 45)}`, steps: match.steps, examTip: match.tip, text: rawText, modelUsed: 'Offline Knowledge Base', isGeminiLive: true };
   }
-
-  throw new Error("Public LLM endpoints temporarily unreachable");
-}
-
-/**
- * Ask Google Gemini Official API (if valid key is provided)
- */
-async function askGeminiOfficial(question, apiKey) {
-  const prompt = `You are the expert RAVS Smart School AI Study Assistant for school students (Grades 5th to 12th, Semi-English Medium, State Board / CBSE).
-Student Question: "${question}"
-Provide a structured, crystal-clear explanation:
-1. Concept Overview (simple English with Marathi/Hindi terms in brackets where helpful)
-2. Step-by-step breakdown or formulas
-3. Real-world example
-4. Board Exam Tip for high marks.`;
-
-  const requestBody = {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.4, maxOutputTokens: 1200 }
+  const rawText = `Explanation for: "${question}"\n\n1. Definition: This is an important academic topic. Focus on core principles.\n2. Key Points: Identify main components, formulas, or events.\n3. Application: Where does this appear in real life or advanced studies?\n4. Exam Strategy: Clear bullet points, defined terms, one example minimum.\n\nExam Tip: Highlight keywords, draw diagrams where applicable, structure your answer.`;
+  return {
+    title: `Study Guide: ${question.slice(0, 45)}`,
+    steps: ['1. Definition & Core Concept', '2. Key Components', '3. Real-world Application', '4. Exam Strategy'],
+    examTip: 'Exam Tip: Always define terms, provide examples, and write in clear bullet points.',
+    text: rawText,
+    modelUsed: 'Offline Knowledge Base',
+    isGeminiLive: true
   };
-
-  const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
-
-  for (const model of modelsToTry) {
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody)
-        }
-      );
-
-      if (!response.ok) continue;
-
-      const data = await response.json();
-      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!rawText) continue;
-
-      const lines = rawText.split('\n\n').filter(p => p.trim().length > 0);
-      let examTip = "";
-      const tipIndex = lines.findIndex(l => l.toLowerCase().includes('exam tip') || l.toLowerCase().includes('board exam'));
-      if (tipIndex !== -1) {
-        examTip = lines[tipIndex].replace(/[*#]/g, '').trim();
-        lines.splice(tipIndex, 1);
-      }
-
-      return {
-        title: `Gemini Study Guide: ${question.slice(0, 40)}${question.length > 40 ? '...' : ''}`,
-        steps: lines.length > 1 ? lines : [rawText],
-        examTip: examTip || "State Board Exam Tip: Write clear steps, define scientific terms, and draw neat diagrams.",
-        text: rawText,
-        modelUsed: `Google ${model}`,
-        isGeminiLive: true
-      };
-    } catch {
-      // Continue to next model
-    }
-  }
-
-  throw new Error("Gemini API key rejected or models unavailable");
 }
 
-/**
- * Universal Ask AI Tutor entry point
- * 1. Checks Free Public LLM (Always available, 0 config)
- * 2. Checks Google Gemini (if user provided API key)
- * 3. Graceful fallback to Offline Smart Knowledge Engine
- */
-export async function askGeminiTutor(question, customApiKey = "") {
+// MAIN EXPORT - tries engines in priority order
+export async function askGeminiTutor(question, customApiKey = '') {
   const cleanQ = (question || '').trim();
-  if (!cleanQ) {
-    return generateOfflineResponse("General Doubt");
-  }
+  if (!cleanQ) return askOffline('General Study Doubt');
 
-  // 1. Try Free Public LLM first for instant zero-config response
+  // 1. Groq AI - primary (best quality, genuine answers)
   try {
-    const publicResult = await askFreePublicLLM(cleanQ);
-    if (publicResult && publicResult.text) {
-      return publicResult;
-    }
-  } catch (pubErr) {
-    console.warn('Public LLM attempt notice:', pubErr.message);
-  }
+    const result = await askGroq(cleanQ);
+    if (result && result.text) return result;
+  } catch (e) { console.warn('[AI] Groq skipped:', e.message); }
 
-  // 2. Try Google Gemini API if a valid key exists (starts with AIza...)
-  const apiKey = (customApiKey && customApiKey.trim().length > 10) 
-    ? customApiKey.trim() 
-    : (GEMINI_API_KEY.startsWith('AIza') ? GEMINI_API_KEY : '');
+  // 2. Google Gemini - secondary
+  try {
+    const result = await askGemini(cleanQ);
+    if (result && result.text) return result;
+  } catch (e) { console.warn('[AI] Gemini skipped:', e.message); }
 
-  if (apiKey) {
-    try {
-      const geminiResult = await askGeminiOfficial(cleanQ, apiKey);
-      if (geminiResult && geminiResult.text) {
-        return geminiResult;
-      }
-    } catch (gemErr) {
-      console.warn('Gemini API attempt notice:', gemErr.message);
-    }
-  }
+  // 3. Pollinations.ai - tertiary (free public)
+  try {
+    const result = await askPollinations(cleanQ);
+    if (result && result.text) return result;
+  } catch (e) { console.warn('[AI] Pollinations skipped:', e.message); }
 
-  // 3. Fallback to smart offline knowledge base
-  return generateOfflineResponse(cleanQ);
+  // 4. Offline Knowledge Base - always works
+  return askOffline(cleanQ);
 }

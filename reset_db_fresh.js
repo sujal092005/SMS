@@ -97,21 +97,86 @@ async function resetDatabaseFresh() {
     { classId: '12A', className: 'Class 12-A', section: 'A' }
   ];
 
-  for (const c of classesList) {
-    await setDoc(doc(db, 'classes', c.classId), {
-      ...c,
-      studentCount: 0,
-      classTeacherUid: null,
-      classTeacherName: 'Unassigned',
-      updatedAt: serverTimestamp()
-    });
+  // 4. Seed clean Drivers & Fleet
+  const initialDrivers = [
+    {
+      id: 'drv_01',
+      loginId: 'DRV-RAJESH4',
+      name: 'Rajesh Kumar',
+      driverName: 'Rajesh Kumar',
+      phone: '9876543210',
+      driverPhone: '+91 98765 43210',
+      password: 'Driver@123',
+      busId: 'BUS-01',
+      assignedBus: 'BUS-01',
+      licenseNumber: 'MH-04-2018-0098765',
+      role: 'driver',
+      active: true
+    },
+    {
+      id: 'drv_02',
+      loginId: 'DRV-SURESH2',
+      name: 'Suresh Patil',
+      driverName: 'Suresh Patil',
+      phone: '9876543211',
+      driverPhone: '+91 98765 43211',
+      password: 'Driver@123',
+      busId: 'BUS-02',
+      assignedBus: 'BUS-02',
+      licenseNumber: 'MH-04-2019-0012345',
+      role: 'driver',
+      active: true
+    }
+  ];
+
+  for (const drv of initialDrivers) {
+    await setDoc(doc(db, 'drivers', drv.id), { ...drv, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    await setDoc(doc(db, 'users', drv.id), { ...drv, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  }
+
+  const initialBuses = [
+    {
+      id: 'BUS-01',
+      busId: 'BUS-01',
+      busNumber: 'Bus 01 - North Campus Route',
+      plateNumber: 'MH-04-AB-1234',
+      route: 'City Center ➔ West Hills ➔ Main Campus',
+      driverName: 'Rajesh Kumar',
+      driverPhone: '+91 98765 43210',
+      driverId: 'drv_01',
+      capacity: '40 Seats',
+      status: 'STANDBY',
+      lat: 18.5204,
+      lng: 73.8567,
+      speed: 0
+    },
+    {
+      id: 'BUS-02',
+      busId: 'BUS-02',
+      busNumber: 'Bus 02 - South Suburb Express',
+      plateNumber: 'MH-04-CD-5678',
+      route: 'Railway Station ➔ South Extension ➔ Main Campus',
+      driverName: 'Suresh Patil',
+      driverPhone: '+91 98765 43211',
+      driverId: 'drv_02',
+      capacity: '45 Seats',
+      status: 'STANDBY',
+      lat: 18.5304,
+      lng: 73.8667,
+      speed: 0
+    }
+  ];
+
+  for (const bus of initialBuses) {
+    await setDoc(doc(db, 'buses', bus.id), { ...bus, updatedAt: serverTimestamp() });
   }
 
   console.log('✨ Clean database structure initialized successfully!');
   console.log('\n=============================================');
-  console.log('🔑 FRESH ADMIN CREDENTIALS:');
-  console.log(`Login ID: ${adminLoginId}`);
-  console.log(`Password: ${adminPassword}`);
+  console.log('🔑 FRESH ADMIN & DRIVER CREDENTIALS:');
+  console.log(`Admin: ID = ${adminLoginId} | Pass = ${adminPassword}`);
+  console.log('Driver 1: ID = DRV-RAJESH4 | Pass = Driver@123 (Bus 01)');
+  console.log('Driver 2: ID = DRV-SURESH2 | Pass = Driver@123 (Bus 02)');
   console.log('=============================================\n');
 }
 

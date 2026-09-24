@@ -6,6 +6,7 @@ import DeviceFrame from './components/common/DeviceFrame';
 import TopHeader from './components/common/TopHeader';
 import BottomNav from './components/common/BottomNav';
 import Toast from './components/common/Toast';
+import NotificationToast from './components/NotificationToast';
 import ClassTimetable from './components/common/ClassTimetable';
 
 // Auth Screens
@@ -61,6 +62,7 @@ export default function App() {
       <DeviceFrame>
         <SignInScreen />
         <Toast />
+        <NotificationToast />
       </DeviceFrame>
     );
   }
@@ -120,6 +122,7 @@ export default function App() {
       </main>
       <BottomNav currentTab={currentTab} onTabChange={setCurrentTab} />
       <Toast />
+      <NotificationToast />
 
       {/* Forced first-login password change modal */}
       {mustChangePassword && <SetNewPasswordModal />}

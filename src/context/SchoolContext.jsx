@@ -31,6 +31,9 @@ import {
   listenToUserProfile,
   listenToSchoolConfig,
   listenToTeachersList,
+  listenToDriversList,
+  addDriverToCloud,
+  deleteDriverFromCloud,
   listenToStudentsList,
   listenToClassesList,
   listenToNotices,
@@ -57,6 +60,15 @@ import {
   downloadNoteMaterial
 } from '../services/localFileStorage';
 import { askGeminiTutor } from '../services/gemini';
+import {
+  requestNotificationPermission,
+  notifyBusTripStarted,
+  notifyBusTripEnded,
+  notifyAttendanceMarked,
+  notifyNewNote,
+  notifyNewNotice,
+  notifyNewMessage
+} from '../services/notifications';
 
 const SchoolContext = createContext();
 
@@ -101,6 +113,28 @@ export function SchoolProvider({ children }) {
   const [facultyChats, setFacultyChats] = useState(INITIAL_FACULTY_CHATS);
   const [classChats, setClassChats] = useState(INITIAL_CLASS_CHATS);
   const [buses, setBuses] = useState(INITIAL_BUSES);
+  const [drivers, setDrivers] = useState([
+    {
+      id: 'drv_01',
+      loginId: 'DRV-RAJESH4',
+      name: 'Rajesh Kumar',
+      phone: '+91 98765 43210',
+      busId: 'BUS-01',
+      licenseNumber: 'MH-04-2018-0098765',
+      password: 'Driver@123',
+      active: true
+    },
+    {
+      id: 'drv_02',
+      loginId: 'DRV-SURESH2',
+      name: 'Suresh Patil',
+      phone: '+91 98765 43211',
+      busId: 'BUS-02',
+      licenseNumber: 'MH-04-2019-0012345',
+      password: 'Driver@123',
+      active: true
+    }
+  ]);
   const [busCoords, setBusCoords] = useState({});
   const [teacherPunchLogs, setTeacherPunchLogs] = useState(INITIAL_TEACHER_ATTENDANCE_LOGS);
   const [isTripActive, setIsTripActive] = useState(false);
@@ -220,9 +254,15 @@ export function SchoolProvider({ children }) {
       if (logs && logs.length > 0) setTeacherPunchLogs(logs);
     });
 
+    // Drivers List
+    const unsubDrivers = listenToDriversList((dList) => {
+      if (dList && dList.length > 0) setDrivers(dList);
+    });
+
     return () => {
       unsubConfig();
       unsubTeachers();
+      unsubDrivers();
       unsubClasses();
       unsubNotices();
       unsubBuses();
@@ -334,6 +374,7 @@ export function SchoolProvider({ children }) {
         localStorage.setItem('ravs_current_user', JSON.stringify(profile));
       }
       addToast(`Welcome back, ${res.userData?.name || 'User'}!`, 'success');
+      requestNotificationPermission();
     }
     return res;
   };
@@ -517,6 +558,26 @@ export function SchoolProvider({ children }) {
     }
   };
 
+  const addDriver = async (driverData) => {
+    setAuthLoading(true);
+    const res = await addDriverToCloud(driverData);
+    setAuthLoading(false);
+    if (res?.success) {
+      const saved = res.driver || driverData;
+      setDrivers((prev) => [saved, ...prev.filter(d => d.id !== (res.id || driverData.id))]);
+      addToast(`Driver "${driverData.name}" registered successfully!`, 'success');
+    } else {
+      addToast('Failed to add driver: ' + (res?.error || 'Unknown error'), 'error');
+    }
+    return res;
+  };
+
+  const deleteDriver = async (driverId) => {
+    await deleteDriverFromCloud(driverId);
+    setDrivers((prev) => prev.filter((d) => d.id !== driverId));
+    addToast('Driver removed from active fleet registry.', 'info');
+  };
+
   const resetPassword = async (targetUid) => {
     const res = await resetUserPasswordCallable(targetUid);
     if (res.success) {
@@ -548,6 +609,7 @@ export function SchoolProvider({ children }) {
     const res = await addNoticeToCloud(newNotice);
     if (res?.success) {
       addToast('Notice published to campus network!', 'success');
+      notifyNewNotice(noticeData.title || 'New school notice posted');
     }
     return res;
   };
@@ -603,6 +665,19 @@ export function SchoolProvider({ children }) {
     return { success: true, id: newNote.id };
   };
 
+  // Trigger notification for new note/file upload (after function is defined)
+  const uploadClassNoteWithNotify = async (noteData, rawFile = null) => {
+    const res = await uploadClassNote(noteData, rawFile);
+    if (res?.success) {
+      notifyNewNote(
+        noteData.title || 'Study Material',
+        noteData.subject || noteData.classId || 'Class',
+        currentUser?.name || 'Teacher'
+      );
+    }
+    return res;
+  };
+
   const sendFacultyMessage = async (messageText) => {
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const message = {
@@ -618,6 +693,7 @@ export function SchoolProvider({ children }) {
     };
     setFacultyChats((prev) => [...prev, message]);
     await sendFacultyChatMessage('general', message);
+    notifyNewMessage(currentUser?.name || 'Faculty', messageText.slice(0, 80));
   };
 
   const sendClassMessage = async (classId, messageText, isTeacher = false, badge = '') => {
@@ -644,6 +720,7 @@ export function SchoolProvider({ children }) {
     });
 
     await sendClassChatToCloud(targetClass, message);
+    notifyNewMessage(currentUser?.name || (isTeacher ? 'Teacher' : 'Student'), messageText.slice(0, 80));
   };
 
   const submitAttendance = async (classId, students, photoUrl = null) => {
@@ -674,6 +751,16 @@ export function SchoolProvider({ children }) {
     );
 
     addToast(`Attendance submitted for Class ${classId}!`, 'success');
+
+    // Notify for each student marked
+    const presentCount = students.filter(s => s.status?.toLowerCase() === 'present').length;
+    const absentCount = students.filter(s => s.status?.toLowerCase() === 'absent').length;
+    notifyAttendanceMarked(
+      `Class ${classId}`,
+      `${presentCount} present, ${absentCount} absent`,
+      `Class ${classId}`
+    );
+
     return res;
   };
 
@@ -739,6 +826,7 @@ export function SchoolProvider({ children }) {
       )
     );
     addToast(`🚌 Bus Journey Started for ${busId}! Live GPS broadcasting active.`, 'success');
+    notifyBusTripStarted(busId, details.driverName || 'Driver', details.route || '');
   };
 
   const stopTrip = async (busIdOrDetails = 'BUS-01') => {
@@ -749,6 +837,7 @@ export function SchoolProvider({ children }) {
       (prev || []).map((b) => (b.id === busId ? { ...b, status: 'STANDBY' } : b))
     );
     addToast('🛑 Bus Journey Ended. Status updated to Standby.', 'info');
+    notifyBusTripEnded(busId);
   };
 
   const updateBusCoords = async (busId, coords, driverInfo = {}) => {
@@ -949,7 +1038,7 @@ export function SchoolProvider({ children }) {
         addNotice,
         deleteNotice,
         classNotes,
-        uploadClassNote,
+        uploadClassNote: uploadClassNoteWithNotify,
         downloadNoteMaterial,
         getNoteFileFromStorage,
         facultyChats,
