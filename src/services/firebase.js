@@ -39,6 +39,13 @@ import {
   getFunctions,
   httpsCallable
 } from 'firebase/functions';
+import {
+  getMessaging,
+  getToken as getFcmToken,
+  onMessage as onFcmMessage
+} from 'firebase/messaging';
+import { Capacitor } from '@capacitor/core';
+import { PushNotifications } from '@capacitor/push-notifications';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
@@ -54,6 +61,7 @@ let db = null;
 let auth = null;
 let storage = null;
 let functionsInstance = null;
+let messagingInstance = null;
 export let isFirebaseConnected = false;
 
 try {
@@ -77,6 +85,14 @@ try {
     } catch (fErr) {
       console.info('Firebase Functions optional init warning:', fErr.message);
     }
+    try {
+      // FCM Messaging only works on web (not available in Capacitor native context here)
+      if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+        messagingInstance = getMessaging(app);
+      }
+    } catch (mErr) {
+      console.info('Firebase Messaging optional init warning:', mErr.message);
+    }
     isFirebaseConnected = true;
     console.log('⚡ Firebase connected — RAVS Smart School');
   } else {
@@ -86,7 +102,7 @@ try {
   console.warn('Firebase init error:', err.message);
 }
 
-export { app, db, auth, storage, functionsInstance };
+export { app, db, auth, storage, functionsInstance, messagingInstance };
 
 // ─── LOGIN ID TO EMAIL CONVERSION ──────────────────────────────────────────
 export const loginIdToAuthEmail = (loginId) => {
@@ -671,54 +687,69 @@ export const deleteDriverFromCloud = async (driverId) => {
 export const listenToStudentsList = (classId, callback) => {
   if (!isFirebaseConnected || !db) return () => {};
 
-  const normalizeStudent = (d, fallbackClass = classId) => ({
-    id: d.id,
-    uid: d.id,
-    classId: d.data().classId || d.data().class_id || fallbackClass,
-    ...d.data(),
-    // Normalize field names: support both old snake_case and camelCase
-    loginId: d.data().login_id || d.data().loginId || d.id,
-    login_id: d.data().login_id || d.data().loginId || d.id,
-    parentPhone: d.data().parent_number || d.data().parentPhone || '',
-    parent_number: d.data().parent_number || d.data().parentPhone || '',
-    parentName: d.data().parent_name || d.data().parentName || '',
-    parent_name: d.data().parent_name || d.data().parentName || ''
-  });
+  const normalizeStudent = (d, fallbackClass = classId) => {
+    const data = d.data() || {};
+    const pathSegments = d.ref?.path ? d.ref.path.split('/') : [];
+    const pathClass = (pathSegments.length >= 2 && pathSegments[0] === 'classes') ? pathSegments[1] : null;
+    const finalClass = (data.classId || data.class_id || pathClass || fallbackClass || '').trim().toUpperCase();
+
+    return {
+      id: d.id,
+      uid: d.id,
+      classId: finalClass,
+      ...data,
+      // Normalize field names: support both old snake_case and camelCase
+      loginId: data.login_id || data.loginId || d.id,
+      login_id: data.login_id || data.loginId || d.id,
+      parentPhone: data.parent_number || data.parentPhone || '',
+      parent_number: data.parent_number || data.parentPhone || '',
+      parentName: data.parent_name || data.parentName || '',
+      parent_name: data.parent_name || data.parentName || ''
+    };
+  };
 
   if (classId && classId !== 'ALL') {
+    const cleanClass = classId.trim().toUpperCase();
     // Primary: new class_student subcollection
-    const newSubCol = collection(db, 'classes', classId, 'class_student');
+    const newSubCol = collection(db, 'classes', cleanClass, 'class_student');
     const unsubNew = onSnapshot(newSubCol, (snap) => {
-      const fromNew = snap.docs.map(d => normalizeStudent(d, classId))
+      const fromNew = snap.docs.map(d => normalizeStudent(d, cleanClass))
         .sort((a, b) => (a.rollNo || '').localeCompare(b.rollNo || ''));
       if (fromNew.length > 0) {
         callback(fromNew);
       } else {
         // Fallback: flat students collection
-        const simpleQ = query(col('students'), where('classId', '==', classId));
+        const simpleQ = query(col('students'), where('classId', '==', cleanClass));
         getDocs(simpleQ).then((s) => {
-          callback(s.docs.map(d => normalizeStudent(d, classId))
+          callback(s.docs.map(d => normalizeStudent(d, cleanClass))
             .sort((a, b) => (a.rollNo || '').localeCompare(b.rollNo || '')));
         }).catch(() => callback([]));
       }
     }, (err) => {
       console.warn('class_student listener warning:', err.message);
-      const simpleQ = query(col('students'), where('classId', '==', classId));
+      const simpleQ = query(col('students'), where('classId', '==', cleanClass));
       onSnapshot(simpleQ, (s) => {
-        callback(s.docs.map(d => normalizeStudent(d, classId))
+        callback(s.docs.map(d => normalizeStudent(d, cleanClass))
           .sort((a, b) => (a.rollNo || '').localeCompare(b.rollNo || '')));
       });
     });
     return unsubNew;
   } else {
     // ALL classes: listen to flat students collection (used by admin)
-    const q = query(col('students'), orderBy('rollNo', 'asc'));
-    return onSnapshot(q, (snap) => {
-      callback(snap.docs.map(d => normalizeStudent(d, '10A')));
-    }, () => {
-      return onSnapshot(col('students'), (s) => {
-        callback(s.docs.map(d => normalizeStudent(d, '10A')));
-      });
+    return onSnapshot(col('students'), (snap) => {
+      if (!snap.empty) {
+        callback(snap.docs.map(d => normalizeStudent(d, '10A')));
+      } else {
+        // Fallback to collectionGroup class_student if flat collection is empty
+        getDocs(collectionGroup(db, 'class_student')).then(cgSnap => {
+          callback(cgSnap.docs.map(d => normalizeStudent(d, '10A')));
+        }).catch(() => callback([]));
+      }
+    }, (err) => {
+      console.warn('ALL students listener warning:', err.message);
+      getDocs(collectionGroup(db, 'class_student')).then(cgSnap => {
+        callback(cgSnap.docs.map(d => normalizeStudent(d, '10A')));
+      }).catch(() => callback([]));
     });
   }
 };
@@ -928,23 +959,48 @@ export const listenToBusLocations = (callback) => {
 export const submitStudentAttendanceToCloud = async (classId, students, teacherId, photoUrl = null) => {
   if (!isFirebaseConnected || !db) return { success: false, mode: 'local' };
   try {
-    const sessionId = `att_${classId}_${new Date().toISOString().slice(0, 10)}`;
-    await setDoc(docRef('attendance', sessionId), {
-      classId,
+    const cleanClass = (classId || '10A').trim().toUpperCase();
+    const todayIso = new Date().toISOString();
+    const dateStr = new Date().toLocaleDateString('en-IN');
+    const sessionId = `att_${cleanClass}_${todayIso.slice(0, 10)}`;
+
+    const attendanceData = {
+      classId: cleanClass,
       students,
-      teacherId,
+      teacherId: teacherId || 'tch',
       photoUrl: photoUrl || null,
       submittedAt: serverTimestamp(),
-      date: new Date().toLocaleDateString('en-IN')
-    }, { merge: true });
-    return { success: true, id: sessionId };
-  } catch (e) { console.error('Student attendance sync:', e); return { success: false, error: e.message }; }
+      submittedAtIso: todayIso,
+      date: dateStr,
+      dateKey: todayIso.slice(0, 10)
+    };
+
+    await setDoc(docRef('attendance', sessionId), attendanceData, { merge: true });
+    return { success: true, id: sessionId, data: attendanceData };
+  } catch (e) {
+    console.error('Student attendance sync:', e);
+    return { success: false, error: e.message };
+  }
 };
 
 export const listenToStudentAttendance = (callback) => {
   if (!isFirebaseConnected || !db) return () => {};
   return onSnapshot(col('attendance'), (snap) => {
-    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    callback(snap.docs.map((d) => {
+      const data = d.data() || {};
+      let resolvedSubmittedAt = data.submittedAtIso || data.date;
+      if (data.submittedAt?.toDate) {
+        resolvedSubmittedAt = data.submittedAt.toDate().toISOString();
+      } else if (data.submittedAt?.seconds) {
+        resolvedSubmittedAt = new Date(data.submittedAt.seconds * 1000).toISOString();
+      }
+      return {
+        id: d.id,
+        ...data,
+        classId: (data.classId || '').trim().toUpperCase(),
+        submittedAt: resolvedSubmittedAt
+      };
+    }));
   }, (err) => console.warn('Student attendance listener error:', err.message));
 };
 
@@ -953,3 +1009,150 @@ export const getBackendStatus = () => ({
   label: isFirebaseConnected ? '☁️ Firebase Live' : '💾 Local Storage',
   lastSync: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 });
+
+// ─── FCM TOKEN MANAGEMENT ───────────────────────────────────────────────────
+
+/**
+ * Retrieve the FCM push token for this browser/device and save it to Firestore.
+ * Stored at: userFcmTokens/{uid}/tokens/{tokenHash}
+ * Also stores role + classId so Cloud Functions can do role-targeted queries.
+ *
+ * @param {string} uid - Firebase Auth UID of the logged-in user
+ * @param {object} userProfile - { role, classId } used for targeted delivery
+ * @param {string} vapidKey - VAPID key from Firebase Console (optional, read from env)
+ * @returns {string|null} the FCM token, or null on failure
+ */
+export const saveFcmToken = async (uid, userProfile = {}, vapidKey = null) => {
+  if (!isFirebaseConnected || !db || !uid) return null;
+
+  // ─── Native Android Platform (Capacitor) ──────────────────────────────────
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await PushNotifications.removeAllListeners();
+
+      PushNotifications.addListener('registration', async (token) => {
+        const tokenValue = token?.value;
+        if (!tokenValue) return;
+
+        const tokenHash = btoa(tokenValue).slice(0, 32).replace(/[+/=]/g, '');
+        await setDoc(
+          doc(db, 'userFcmTokens', uid, 'tokens', tokenHash),
+          {
+            token: tokenValue,
+            uid,
+            role: userProfile.role || 'unknown',
+            classId: userProfile.classId || null,
+            platform: 'android',
+            savedAt: serverTimestamp()
+          },
+          { merge: true }
+        );
+        console.log('[Native Push] Token saved for Android APK, uid:', uid);
+      });
+
+      PushNotifications.addListener('registrationError', (err) => {
+        console.warn('[Native Push] Registration error:', err);
+      });
+
+      await PushNotifications.register();
+      return 'android_native_registered';
+    } catch (nativeErr) {
+      console.warn('[Native Push] saveFcmToken error:', nativeErr.message);
+      return null;
+    }
+  }
+
+  // ─── Web Platform ─────────────────────────────────────────────────────────
+  if (!messagingInstance) return null;
+  try {
+    const key = vapidKey ||
+      import.meta.env.VITE_FIREBASE_VAPID_KEY ||
+      null;
+
+    const currentToken = await getFcmToken(messagingInstance, {
+      vapidKey: key || undefined
+    });
+
+    if (!currentToken) {
+      console.warn('[FCM] No registration token available. Request permission first.');
+      return null;
+    }
+
+    // Simple hash for doc ID — avoids / in token string
+    const tokenHash = btoa(currentToken).slice(0, 32).replace(/[+/=]/g, '');
+
+    await setDoc(
+      doc(db, 'userFcmTokens', uid, 'tokens', tokenHash),
+      {
+        token: currentToken,
+        uid,
+        role: userProfile.role || 'unknown',
+        classId: userProfile.classId || null,
+        platform: 'web',
+        savedAt: serverTimestamp()
+      },
+      { merge: true }
+    );
+
+    console.log('[FCM] Token saved for uid:', uid, '| role:', userProfile.role);
+    return currentToken;
+  } catch (err) {
+    console.warn('[FCM] saveFcmToken error:', err.message);
+    return null;
+  }
+};
+
+/**
+ * Listen for foreground FCM messages and dispatch them as 'ravs-notification' events
+ * so the existing NotificationToast component can display them.
+ *
+ * Call this once after login, clean up on logout.
+ * @returns {function} unsubscribe function
+ */
+export const listenToFcmMessages = (callback) => {
+  // ─── Native Android Platform ──────────────────────────────────────────────
+  if (Capacitor.isNativePlatform()) {
+    let listener = null;
+    PushNotifications.addListener('pushNotificationReceived', (notification) => {
+      const title = notification.title || 'RAVS Notification';
+      const body = notification.body || '';
+      window.dispatchEvent(new CustomEvent('ravs-notification', {
+        detail: {
+          title,
+          body,
+          icon: notification.data?.icon || '🔔',
+          tag: notification.data?.type || 'fcm',
+          timestamp: Date.now()
+        }
+      }));
+      if (typeof callback === 'function') callback(notification);
+    }).then(l => { listener = l; }).catch(() => {});
+
+    return () => {
+      if (listener) listener.remove();
+    };
+  }
+
+  // ─── Web Platform ─────────────────────────────────────────────────────────
+  if (!messagingInstance) return () => {};
+  try {
+    return onFcmMessage(messagingInstance, (payload) => {
+      const { title, body } = payload.notification || {};
+      if (title) {
+        window.dispatchEvent(new CustomEvent('ravs-notification', {
+          detail: {
+            title: title || 'RAVS Notification',
+            body: body || '',
+            icon: payload.data?.icon || '🔔',
+            tag: payload.data?.type || 'fcm',
+            timestamp: Date.now()
+          }
+        }));
+      }
+      if (typeof callback === 'function') callback(payload);
+    });
+  } catch (err) {
+    console.warn('[FCM] listenToFcmMessages error:', err.message);
+    return () => {};
+  }
+};

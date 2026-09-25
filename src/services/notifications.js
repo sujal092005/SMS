@@ -38,18 +38,18 @@ export async function requestNotificationPermission() {
   if (Capacitor.isNativePlatform()) {
     try {
       const localReq = await LocalNotifications.requestPermissions();
+      let pushGranted = false;
       const pushStatus = await PushNotifications.checkPermissions();
       if (pushStatus.receive === 'prompt' || pushStatus.receive === 'prompt-with-rationale') {
         const req = await PushNotifications.requestPermissions();
-        if (req.receive === 'granted') {
-          await PushNotifications.register();
-        }
-      } else if (pushStatus.receive === 'granted') {
-        await PushNotifications.register();
+        pushGranted = req.receive === 'granted';
+      } else {
+        pushGranted = pushStatus.receive === 'granted';
       }
-      return localReq.display === 'granted';
+      return pushGranted || localReq.display === 'granted';
     } catch (e) {
       console.warn('[Native Push] Permission request error:', e.message);
+      return false;
     }
   }
 

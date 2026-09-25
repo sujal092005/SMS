@@ -128,5 +128,23 @@ service cloud.firestore {
     match /buses/{busId} {
       allow read, write: if true;
     }
+
+    // 13. FCM Push Token Registry
+    // Each user can write their own tokens; only the server (Cloud Functions) reads them.
+    match /userFcmTokens/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /userFcmTokens/{uid}/tokens/{tokenId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // 14. Per-user Notification Inbox (for future in-app inbox if needed)
+    // Each user can only read/write their own notification documents.
+    match /notifications/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /notifications/{uid}/inbox/{notifId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
   }
 }

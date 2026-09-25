@@ -52,7 +52,9 @@ import {
   submitStudentAttendanceToCloud,
   listenToStudentAttendance,
   uploadFileToCloudStorage,
-  getBackendStatus
+  getBackendStatus,
+  saveFcmToken,
+  listenToFcmMessages
 } from '../services/firebase';
 import {
   saveNoteFileToStorage,
@@ -137,6 +139,14 @@ export function SchoolProvider({ children }) {
   ]);
   const [busCoords, setBusCoords] = useState({});
   const [teacherPunchLogs, setTeacherPunchLogs] = useState(INITIAL_TEACHER_ATTENDANCE_LOGS);
+  const [attendanceRecords, setAttendanceRecords] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ravs_attendance_records');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [isTripActive, setIsTripActive] = useState(false);
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [currentEta, setCurrentEta] = useState(12);
@@ -215,6 +225,32 @@ export function SchoolProvider({ children }) {
     return () => unsubAuth();
   }, []);
 
+  // ─── FCM Token Registration & Foreground Message Listener ─────────────────
+  useEffect(() => {
+    if (!currentUser?.uid || !isFirebaseConnected) return;
+
+    // Register device push token so Cloud Functions can target this user
+    const registerToken = async () => {
+      try {
+        const perm = await requestNotificationPermission();
+        if (perm) {
+          await saveFcmToken(currentUser.uid, {
+            role: currentUser.role,
+            classId: currentUser.classId || null
+          });
+        }
+      } catch (e) {
+        console.warn('[FCM] Token registration error:', e.message);
+      }
+    };
+    registerToken();
+
+    // Forward foreground FCM push messages to the in-app toast system
+    const unsubFcm = listenToFcmMessages();
+    return () => unsubFcm();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.uid]);
+
   // ─── Real-time Firestore Subscriptions ────────────────────────────────────
   useEffect(() => {
     if (!isFirebaseConnected) return;
@@ -246,7 +282,23 @@ export function SchoolProvider({ children }) {
 
     // Student Attendance Records
     const unsubAtt = listenToStudentAttendance((records) => {
-      if (records) setAttendanceRecords(records);
+      if (records && records.length > 0) {
+        setAttendanceRecords((prev) => {
+          const merged = [...records];
+          prev.forEach((p) => {
+            const pClass = (p.classId || '').trim().toUpperCase();
+            if (!merged.some((m) => (m.classId || '').trim().toUpperCase() === pClass)) {
+              merged.push(p);
+            }
+          });
+          try {
+            localStorage.setItem('ravs_attendance_records', JSON.stringify(merged));
+          } catch (e) {
+            console.warn('LocalStorage save error:', e);
+          }
+          return merged;
+        });
+      }
     });
 
     // Teacher Campus Gate Attendance
@@ -271,15 +323,16 @@ export function SchoolProvider({ children }) {
     };
   }, []);
 
-  // Subscribe to students list based on active class
+  // Subscribe to students list based on active role/class
   useEffect(() => {
     if (!isFirebaseConnected) return;
+    const isUserAdmin = activeRole === 'ADMIN' || (currentUser?.role || '').toLowerCase() === 'admin' || currentUser?.uiRole === 'ADMIN';
     const targetClass = currentUser?.classId || selectedClassId || '10A';
-    const unsubStudents = listenToStudentsList(currentUser?.role === 'admin' ? 'ALL' : targetClass, (list) => {
+    const unsubStudents = listenToStudentsList(isUserAdmin ? 'ALL' : targetClass, (list) => {
       if (list) setStudentsList(list);
     });
     return () => unsubStudents();
-  }, [currentUser?.classId, currentUser?.role, selectedClassId]);
+  }, [currentUser?.classId, currentUser?.role, currentUser?.uiRole, activeRole, selectedClassId]);
 
   // Subscribe to class notes (realtime cloud sync)
   useEffect(() => {
@@ -724,20 +777,35 @@ export function SchoolProvider({ children }) {
   };
 
   const submitAttendance = async (classId, students, photoUrl = null) => {
-    const res = await submitStudentAttendanceToCloud(classId, students, currentUser?.uid, photoUrl);
+    const normClassId = (classId || '10A').trim().toUpperCase();
+    const nowIso = new Date().toISOString();
+    const dateStr = new Date().toLocaleDateString('en-IN');
 
-    // Update local attendanceRecords state immediately for Admin & Teacher visibility
+    // Create local attendance record immediately
     const newRecord = {
-      id: res?.id || `att_${classId}_${Date.now()}`,
-      classId,
+      id: `att_${normClassId}_${nowIso.slice(0, 10)}`,
+      classId: normClassId,
       students,
-      teacherId: currentUser?.uid || 'tch',
+      teacherId: currentUser?.uid || currentUser?.loginId || 'tch',
       photoUrl: photoUrl || null,
-      date: new Date().toLocaleDateString('en-IN'),
-      submittedAt: new Date().toISOString()
+      date: dateStr,
+      submittedAt: nowIso,
+      submittedAtIso: nowIso
     };
 
-    setAttendanceRecords((prev) => [newRecord, ...prev.filter((r) => r.classId !== classId)]);
+    // Update local state and localStorage immediately for instant Admin & Teacher reflection
+    setAttendanceRecords((prev) => {
+      const updated = [newRecord, ...prev.filter((r) => (r.classId || '').trim().toUpperCase() !== normClassId)];
+      try {
+        localStorage.setItem('ravs_attendance_records', JSON.stringify(updated));
+      } catch (e) {
+        console.warn('LocalStorage save error:', e);
+      }
+      return updated;
+    });
+
+    // Cloud firestore sync
+    const res = await submitStudentAttendanceToCloud(normClassId, students, currentUser?.uid, photoUrl);
 
     // Update studentsList in state to reflect the latest status
     setStudentsList((prev) =>
@@ -750,15 +818,15 @@ export function SchoolProvider({ children }) {
       })
     );
 
-    addToast(`Attendance submitted for Class ${classId}!`, 'success');
+    addToast(`Attendance submitted for Class ${normClassId}!`, 'success');
 
     // Notify for each student marked
-    const presentCount = students.filter(s => s.status?.toLowerCase() === 'present').length;
-    const absentCount = students.filter(s => s.status?.toLowerCase() === 'absent').length;
+    const presentCount = students.filter(s => (s.status || '').toLowerCase() === 'present').length;
+    const absentCount = students.filter(s => (s.status || '').toLowerCase() === 'absent').length;
     notifyAttendanceMarked(
-      `Class ${classId}`,
+      `Class ${normClassId}`,
       `${presentCount} present, ${absentCount} absent`,
-      `Class ${classId}`
+      `Class ${normClassId}`
     );
 
     return res;
@@ -927,41 +995,71 @@ export function SchoolProvider({ children }) {
     }
   };
 
-  const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const getRecordTimestamp = (rec) => {
+    if (!rec) return 0;
+    if (rec.submittedAt?.toDate) return rec.submittedAt.toDate().getTime();
+    if (rec.submittedAt?.seconds) return rec.submittedAt.seconds * 1000;
+    if (typeof rec.submittedAt === 'string') {
+      const d = new Date(rec.submittedAt);
+      if (!isNaN(d.getTime())) return d.getTime();
+    }
+    if (typeof rec.submittedAtIso === 'string') {
+      const d = new Date(rec.submittedAtIso);
+      if (!isNaN(d.getTime())) return d.getTime();
+    }
+    if (typeof rec.date === 'string') {
+      const parts = rec.date.split('/');
+      if (parts.length === 3) {
+        const d = new Date(`${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`);
+        if (!isNaN(d.getTime())) return d.getTime();
+      }
+      const d = new Date(rec.date);
+      if (!isNaN(d.getTime())) return d.getTime();
+    }
+    return 0;
+  };
 
   const getClassAttendance = (classId) => {
-    const classSts = studentsList.filter((s) => s.classId === classId);
-    if (classSts.length === 0) {
-      return { classId, total: 0, present: 0, absent: 0, late: 0, rate: 100, isSubmitted: false, students: [] };
+    const normClassId = (classId || '').trim().toUpperCase();
+    const classSts = studentsList.filter((s) => (s.classId || '').trim().toUpperCase() === normClassId);
+
+    const sortedRecords = [...attendanceRecords].sort((a, b) => getRecordTimestamp(b) - getRecordTimestamp(a));
+    const latestRecord = sortedRecords.find((r) => (r.classId || '').trim().toUpperCase() === normClassId);
+
+    // Prioritize students list recorded in the submitted attendance record
+    const effectiveStudents = (latestRecord && Array.isArray(latestRecord.students) && latestRecord.students.length > 0)
+      ? latestRecord.students
+      : classSts;
+
+    if (!latestRecord && classSts.length === 0) {
+      return {
+        classId: normClassId,
+        total: 0,
+        present: 0,
+        absent: 0,
+        late: 0,
+        rate: 100,
+        isSubmitted: false,
+        students: []
+      };
     }
 
-    const sortedRecords = [...attendanceRecords].sort((a, b) => new Date(b.submittedAt || b.date) - new Date(a.submittedAt || a.date));
-    const latestRecord = sortedRecords.find((r) => r.classId === classId);
     let present = 0;
     let absent = 0;
     let late = 0;
 
-    if (latestRecord && Array.isArray(latestRecord.students)) {
-      latestRecord.students.forEach((s) => {
-        const st = (s.status || '').toUpperCase();
-        if (st === 'ABSENT') absent++;
-        else if (st === 'LATE') late++;
-        else present++;
-      });
-    } else {
-      classSts.forEach((s) => {
-        const st = (s.status || '').toUpperCase();
-        if (st === 'ABSENT') absent++;
-        else if (st === 'LATE') late++;
-        else present++;
-      });
-    }
+    effectiveStudents.forEach((s) => {
+      const st = (s.status || '').toUpperCase();
+      if (st === 'ABSENT') absent++;
+      else if (st === 'LATE') late++;
+      else present++;
+    });
 
-    const total = classSts.length;
-    const rate = Math.round((present / total) * 100);
+    const total = effectiveStudents.length;
+    const rate = total > 0 ? Math.round((present / total) * 100) : 100;
 
     return {
-      classId,
+      classId: normClassId,
       total,
       present,
       absent,
@@ -970,18 +1068,15 @@ export function SchoolProvider({ children }) {
       isSubmitted: !!latestRecord,
       submittedAt: latestRecord?.date || null,
       photoUrl: latestRecord?.photoUrl || null,
-      students: latestRecord?.students || classSts
+      students: effectiveStudents
     };
   };
 
   const calculateTotalAttendance = () => {
-    if (studentsList.length === 0) {
-      return { total: 0, present: 0, absent: 0, late: 0, rate: 100 };
-    }
-
     let totPresent = 0;
     let totAbsent = 0;
     let totLate = 0;
+    let totTotal = 0;
 
     classesList.forEach((c) => {
       const cId = c.id || c.classId;
@@ -989,15 +1084,18 @@ export function SchoolProvider({ children }) {
       totPresent += cStats.present;
       totAbsent += cStats.absent;
       totLate += cStats.late;
+      totTotal += cStats.total;
     });
 
-    const tot = studentsList.length;
+    const tot = totTotal > 0 ? totTotal : studentsList.length;
+    const rate = tot > 0 ? Math.round((totPresent / tot) * 100) : 100;
+
     return {
       total: tot,
       present: totPresent,
       absent: totAbsent,
       late: totLate,
-      rate: Math.round((totPresent / tot) * 100)
+      rate
     };
   };
 

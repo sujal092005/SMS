@@ -831,3 +831,189 @@ exports.askAIDoubtAssistant = functions.https.onCall(async (data, context) => {
   };
 });
 
+
+// =============================================================================
+// NOTIFICATION TRIGGERS — Firebase Cloud Messaging (FCM) Push Delivery
+// =============================================================================
+// Helper: collect FCM tokens for users matching specific roles and optional classId
+// Stored at: userFcmTokens/{uid}/tokens/{tokenHash} → { token, role, classId }
+
+async function getFcmTokensForRoles(roles, classId) {
+  const tokens = [];
+
+  for (const role of roles) {
+    let q = db.collectionGroup('tokens').where('role', '==', role);
+    if (classId) {
+      q = q.where('classId', '==', classId);
+    }
+    const snap = await q.get();
+    snap.forEach((d) => {
+      const t = d.data().token;
+      if (t && !tokens.includes(t)) tokens.push(t);
+    });
+  }
+
+  return tokens;
+}
+
+// Helper: send multicast FCM push
+async function sendFcmToRoles(roles, classId, notification, data) {
+  const tokens = await getFcmTokensForRoles(roles, classId);
+  if (tokens.length === 0) {
+    console.log('[FCM] No registered tokens for roles:', roles, '| classId:', classId);
+    return;
+  }
+
+  const message = {
+    tokens,
+    notification,
+    data: Object.fromEntries(Object.entries(data || {}).map(([k, v]) => [k, String(v)])),
+    android: {
+      notification: { channelId: 'ravs_high_alerts', priority: 'HIGH' }
+    },
+    apns: {
+      payload: { aps: { sound: 'default' } }
+    }
+  };
+
+  try {
+    const res = await admin.messaging().sendEachForMulticast(message);
+    console.log(`[FCM] Sent ${res.successCount}/${tokens.length} | failures: ${res.failureCount}`);
+  } catch (err) {
+    console.error('[FCM] sendEachForMulticast error:', err.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRIGGER 1: Admin posts a notice → push to ALL roles
+// ─────────────────────────────────────────────────────────────────────────────
+exports.onNoticeCreated = functions.firestore.onDocumentCreated(
+  'notices/{noticeId}',
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const notice = snap.data() || {};
+    const title = notice.title || 'New School Notice';
+    const body = notice.content
+      ? notice.content.slice(0, 100) + (notice.content.length > 100 ? '\u2026' : '')
+      : 'A new notice has been posted by the school administration.';
+
+    await sendFcmToRoles(
+      ['parent', 'driver', 'classTeacher', 'subjectTeacher', 'student'],
+      null,
+      { title: `\ud83d\udce2 ${title}`, body },
+      { type: 'notice', noticeId: snap.id }
+    );
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRIGGER 2a: Admin sends message in faculty chat → notify all teachers
+// ─────────────────────────────────────────────────────────────────────────────
+exports.onFacultyChatMessage = functions.firestore.onDocumentCreated(
+  'facultyChats/{messageId}',
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const msg = snap.data() || {};
+    if (msg.senderRole !== 'admin') return; // Only fire on admin messages
+
+    const preview = (msg.text || msg.message || '').slice(0, 120);
+    const senderName = msg.sender || 'Admin';
+
+    await sendFcmToRoles(
+      ['classTeacher', 'subjectTeacher'],
+      null,
+      { title: `\ud83d\udcac Message from ${senderName}`, body: preview || 'New message from admin.' },
+      { type: 'faculty_chat', messageId: snap.id }
+    );
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRIGGER 2b: Teacher sends message in class chat → notify students of that class
+// ─────────────────────────────────────────────────────────────────────────────
+exports.onClassChatMessage = functions.firestore.onDocumentCreated(
+  'chats/{classId}/messages/{messageId}',
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const msg = snap.data() || {};
+    const senderRole = (msg.senderRole || msg.role || '').toLowerCase();
+    if (!senderRole.includes('teacher')) return; // Only notify on teacher messages
+
+    const targetClassId = event.params.classId;
+    const preview = (msg.text || msg.message || '').slice(0, 120);
+    const senderName = msg.sender || 'Teacher';
+
+    await sendFcmToRoles(
+      ['student'],
+      targetClassId,
+      { title: `\ud83d\udcac ${senderName} (Class ${targetClassId})`, body: preview || 'Your teacher sent a message.' },
+      { type: 'class_chat', classId: targetClassId, messageId: snap.id }
+    );
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRIGGER 3: Driver marks bus as active/started → notify parents, admin, teachers
+// ─────────────────────────────────────────────────────────────────────────────
+exports.onBusStatusChange = functions.firestore.onDocumentWritten(
+  'buses/{busId}',
+  async (event) => {
+    const before = event.data.before.exists ? event.data.before.data() : {};
+    const afterSnap = event.data.after;
+    if (!afterSnap.exists) return; // document deleted
+
+    const after = afterSnap.data() || {};
+    const prevStatus = before.status || '';
+    const newStatus = after.status || '';
+    if (prevStatus === newStatus) return;
+    if (newStatus !== 'ON_ROUTE' && newStatus !== 'ACTIVE') return;
+
+    const busId = event.params.busId;
+    const driverName = after.driverName || 'Assigned Driver';
+    const route = after.route || '';
+
+    await sendFcmToRoles(
+      ['parent', 'admin', 'classTeacher', 'subjectTeacher'],
+      null,
+      {
+        title: `\ud83d\ude8c Bus ${busId} Has Started!`,
+        body: `Driver: ${driverName}${route ? ` | Route: ${route}` : ''}. Bus is now on the way.`
+      },
+      { type: 'bus_started', busId, driverName }
+    );
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRIGGER 4: Teacher uploads a class note → notify students of that class only
+// ─────────────────────────────────────────────────────────────────────────────
+exports.onClassNoteCreated = functions.firestore.onDocumentCreated(
+  'classNotes/{noteId}',
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const note = snap.data() || {};
+    const classId = note.classId;
+    if (!classId) {
+      console.warn('[FCM] onClassNoteCreated: note missing classId, skipping.');
+      return;
+    }
+
+    const teacherName = note.teacherName || note.teacher || 'Teacher';
+    const noteTitle = note.title || 'Study Material';
+    const subject = note.subject || `Class ${classId}`;
+
+    await sendFcmToRoles(
+      ['student'],
+      classId,
+      {
+        title: `\ud83d\udcdd New Note: ${noteTitle}`,
+        body: `${teacherName} uploaded "${noteTitle}" for ${subject}. Tap to open your Study Hub.`
+      },
+      { type: 'class_note', classId, noteId: snap.id }
+    );
+  }
+);

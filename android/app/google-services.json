@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "418513625094",
+    "project_id": "ravssms-a5c7b",
+    "storage_bucket": "ravssms-a5c7b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:418513625094:android:0a817c12da0e60684ba387",
+        "android_client_info": {
+          "package_name": "edu.ravsschool.sms"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBYDB7Gf6DBBGNZi0iGXdplj-S6VzjkZfg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
