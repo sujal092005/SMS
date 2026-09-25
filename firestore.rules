@@ -89,6 +89,17 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // 4d. Collection Group rule — required for collectionGroup('class_student') queries
+    //     Used in parent login (parent_number lookup) across all classes
+    match /{path=**}/class_student/{studentId} {
+      allow read, write: if true;
+    }
+
+    // 4e. Drivers collection (required for driver login lookup)
+    match /drivers/{driverId} {
+      allow read, write: if true;
+    }
+
     // 5. School configuration
     match /school/config {
       allow read, write: if true;
